@@ -1,0 +1,71 @@
+{% extends "usuarios/alumno/base_alumno.html" %}
+{% load custom_filters %} 
+
+{% block content %}
+    <h4 class="mb-4 text-dark fw-bold">📅 Mi Horario de Clases</h4>
+    
+    <div class="card p-4 shadow-sm border-0 bg-white">
+        
+        <h5 class="card-title fw-bold text-secondary mb-3">Horario Semanal</h5>
+        
+        <div class="table-responsive">
+            <table class="table table-bordered table-fixed text-center align-middle" style="min-width: 900px;">
+                <thead class="table-dark sticky-top">
+                    <tr>
+                        <th style="width: 10%;">Hora</th>
+                        {% for dia in dias %}
+                            <th>{{ dia }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Itera sobre las horas generadas dinámicamente: (hora_index, rango_HH:MM - HH:MM) #}
+                    {% for hora_index, hora_rango in horas|enumerate %}
+                        <tr>
+                            {# Columna de la Hora #}
+                            <td class="table-light fw-bold">{{ hora_rango }}</td>
+                            
+                            {# Itera sobre cada día: (dia_index, nombre_del_dia) #}
+                            {% for dia_index, dia_nombre in dias|enumerate %} 
+                                
+                                {# Accede a la celda de la matriz: horario_data[hora_index][dia_index] #}
+                                {% with celda=horario_data|get_item:hora_index|get_item:dia_index %}
+                                    
+                                    {% if celda %}
+                                        {# Hay clase: Usamos los datos (el color viene en 'celda.color') #}
+                                        <td class="{{ celda.color }} text-white p-2" style="font-size: 0.85rem;">
+                                            <strong class="text-uppercase">{{ celda.codigo_grupo }}</strong><br>
+                                            <span class="d-block text-truncate fw-normal">{{ celda.nombre }}</span>
+                                            <small class="fw-bold">({{ celda.tipo }})</small><br>
+                                            <small class="text-white fst-italic">Aula: {{ celda.aula_id }}</small>
+                                        </td>
+                                    {% else %}
+                                        {# No hay clase: Celda vacía (puede ser un bloque de receso/tiempo libre consolidado) #}
+                                        <td></td>
+                                    {% endif %}
+                                
+                                {% endwith %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <hr>
+        
+        {# --- Leyenda de Cursos (Basada en la variable curso_colores) --- #}
+        <h5 class="card-title fw-bold text-secondary mt-4 mb-3">Leyenda de Cursos</h5>
+        <div class="d-flex flex-wrap gap-3">
+            {% for curso_id, color in curso_colores.items %}
+                <span class="badge {{ color }} p-2">
+                    {{ curso_id }}
+                </span>
+            {% empty %}
+                <p class="text-muted">No hay cursos activos para mostrar en la leyenda.</p>
+            {% endfor %}
+        </div>
+        
+    </div>
+    
+{% endblock content %}

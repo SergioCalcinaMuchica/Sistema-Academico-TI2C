@@ -1,0 +1,381 @@
+{% extends "usuarios/profesor/base_profesor.html" %}
+{% load matriculas_tags %} 
+{# Asegúrate de que el filtro 'matriculas_tags' esté en la carpeta templatetags de tu app #}
+
+{% block content %}
+    <h4 class="mb-4">📊 Carga y Estadísticas de Calificaciones</h4>
+    
+    {# Bloque para mostrar mensajes de Django (éxito, error, warning) #}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+
+    <div class="row mb-4">
+        {# Selector de Grupo #}
+        <div class="col-md-8">
+            <label for="grupo_select" class="form-label fw-bold">Seleccionar Grupo de Curso:</label>
+            <select class="form-select shadow-sm" id="grupo_select" onchange="window.location.href='?grupo=' + this.value">
+                <option value="" {% if not grupo_seleccionado %}selected{% endif %}>-- Elija un Grupo --</option>
+                {% for grupo in grupos_asignados %}
+                    <option value="{{ grupo.id }}" {% if grupo_seleccionado.id == grupo.id %}selected{% endif %}>
+                        {{ grupo.curso.id }} - {{ grupo.curso.nombre }} (Grupo {{ grupo.grupo }})
+                        {# USAMOS LA LÓGICA DE SLICE PARA EL SELECT, ya que 'es_grupo_laboratorio' solo existe para el grupo seleccionado #}
+                        {% if grupo.id|slice:":1" == "L" %}
+                             <span class="text-muted">(LAB - Solo Vista)</span> 
+                        {% elif grupo.curso.es_lab %}
+                            <span class="text-danger fw-bold">(LAB)</span>
+                        {% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {% if grupo_seleccionado %}
+        
+        <div class="card p-4 mt-4 shadow-lg border-primary">
+            <h5 class="card-title text-primary">
+                Notas para: <b>{{ grupo_seleccionado.curso.id }} - {{ grupo_seleccionado.curso.nombre }} (Grupo {{ grupo_seleccionado.grupo }})</b>
+                {% if es_grupo_laboratorio %}
+                    <span class="text-danger">(GRUPO DE LABORATORIO)</span>
+                {% endif %}
+            </h5>
+            
+            {# ==================================================================== #}
+            {# INICIO LÓGICA DE OCULTAMIENTO BASADA EN LA VARIABLE DE LA VISTA #}
+            {# Si es un grupo de Laboratorio, o si el profesor tiene 'solo_ver_estadisticas' activado, se oculta la carga #}
+            {# ==================================================================== #}
+            {% if not es_grupo_laboratorio and not solo_ver_estadisticas %}
+                
+                <p class="text-danger small">Advertencia: Las notas fuera del rango (0-20) serán ignoradas y no se guardarán. Dejar vacío equivale a `Nulo`.</p>
+
+                {# Campo de Búsqueda/Filtro #}
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <input type="text" 
+                                class="form-control" 
+                                id="search_input" 
+                                onkeyup="filterTable()" 
+                                placeholder="Buscar Estudiante por CUI o Nombre..." 
+                                title="Escribe el CUI o nombre del estudiante para filtrar la lista.">
+                    </div>
+                </div>
+
+                <form action="{% url 'usuarios:subida_notas' %}" method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="grupo_id" value="{{ grupo_seleccionado.id }}">
+
+                    <div class="table-responsive mb-4" style="max-height: 60vh; overflow-y: auto;">
+                        {# TABLA DE NOTAS #}
+                        <table class="table table-sm table-hover align-middle caption-top" id="notes_table">
+                            <caption class="text-muted small">Total de Estudiantes: {{ estudiantes_matriculados|length }}</caption>
+                            <thead class="table-dark sticky-top" style="top: 0;">
+                                <tr>
+                                    <th style="width: 10%;">CUI</th>
+                                    <th>Nombre Completo del Estudiante</th>
+                                    {# Cabeceras de Notas Dinámicas #}
+                                    {% for campo in campos_nota %}
+                                        <th style="width: 11%;" class="text-center">{{ campo }} (0-20)</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if estudiantes_matriculados %}
+                                    {% for matricula in estudiantes_matriculados %}
+                                        <tr>
+                                            <td class="text-muted small">{{ matricula.estudiante.perfil.id }}</td>
+                                            <td>{{ matricula.estudiante.perfil.nombre }}</td>
+                                            
+                                            {# Campos de Input Dinámicos para cada nota #}
+                                            {% for campo in campos_nota %}
+                                                <td class="text-center">
+                                                    <input type="number" 
+                                                            class="form-control form-control-sm text-center" 
+                                                            name="nota_{{ matricula.estudiante.perfil.id }}_{{ campo }}" 
+                                                            min="0" max="20" 
+                                                            value="{{ matricula|get_attribute:campo|default_if_none:''|stringformat:"g" }}" 
+                                                            step="0.1" 
+                                                            placeholder="-" 
+                                                            title="Nota para {{ campo }}. Rango 0-20.">
+                                                </td>
+                                            {% endfor %}
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="{{ campos_nota|length|add:2 }}" class="text-center text-muted py-4">No hay estudiantes matriculados en este grupo.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-grid mt-3">
+                        <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+                            <i class="bi bi-cloud-arrow-up-fill me-2"></i> Cargar y Actualizar Notas
+                        </button>
+                        <p class="small text-muted text-center mt-2">Los datos se guardarán inmediatamente al presionar este botón.</p>
+                    </div>
+                </form>
+
+            {% else %}
+                {# Mensaje para grupos L o perfiles restringidos #}
+                <hr>
+                <div class="alert alert-warning text-center">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    {% if es_grupo_laboratorio %}
+                        Grupo de Laboratorio: La carga directa de notas no está permitida.
+                    {% else %}
+                        Acceso Restringido: Su perfil solo permite la visualización de estadísticas.
+                    {% endif %}
+                </div>
+            {% endif %}
+            {# ==================================================================== #}
+            {# FIN LÓGICA DE OCULTAMIENTO #}
+            {# ==================================================================== #}
+            
+            {# INICIO DE LA SECCIÓN DE ESTADÍSTICAS Y GRÁFICOS #}
+            {% if estudiantes_matriculados %}
+                <hr class="my-4">
+                <h6 class="card-subtitle mb-3 fw-bold text-success">📈 Análisis Estadístico del Grupo</h6>
+                
+                {# TABLA DE ESTADÍSTICAS #}
+                <div class="table-responsive mb-5">
+                    <table class="table table-bordered table-sm text-center">
+                        <thead class="table-success">
+                            <tr>
+                                <th style="width: 15%;">Estadística</th>
+                                {% for campo in campos_nota %}
+                                    <th>{{ campo }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {# PROMEDIO #}
+                            <tr>
+                                <td class="fw-bold">Promedio (AVG)</td>
+                                {% for campo in campos_nota %}
+                                    <td data-avg="{{ estadisticas|get_attribute:campo|get_attribute:'avg'|default:"0.00" }}" class="stat-avg">{{ estadisticas|get_attribute:campo|get_attribute:'avg'|default:"N/A" }}</td>
+                                {% endfor %}
+                            </tr>
+                            {# MÁXIMA #}
+                            <tr>
+                                <td class="fw-bold text-success">Nota Máxima (MAX)</td>
+                                {% for campo in campos_nota %}
+                                    <td>{{ estadisticas|get_attribute:campo|get_attribute:'max'|default:"N/A" }}</td>
+                                {% endfor %}
+                            </tr>
+                            {# MÍNIMA #}
+                            <tr>
+                                <td class="fw-bold text-danger">Nota Mínima (MIN)</td>
+                                {% for campo in campos_nota %}
+                                    <td>{{ estadisticas|get_attribute:campo|get_attribute:'min'|default:"N/A" }}</td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {# CONTENEDORES DE GRÁFICOS #}
+                <h6 class="card-subtitle mb-3 fw-bold text-info">📊 Distribución Visual de Notas</h6>
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow-sm border-info h-100">
+                            <div class="card-header bg-info text-white fw-bold">Promedio de Notas por Evaluación</div>
+                            <div class="card-body">
+                                <canvas id="avgBarChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow-sm border-secondary h-100">
+                            <div class="card-header bg-secondary text-white fw-bold">Porcentaje de Aprobados/Desaprobados (Promedio Final)</div>
+                            <div class="card-body">
+                                <canvas id="aprobadoDonaChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {# Mensaje de advertencia de notas 0.00 #}
+                {% with avg_val=estadisticas|get_attribute:campos_nota.0|get_attribute:'avg' %}
+                    {% if avg_val == "0.00" %}
+                        <div class="alert alert-warning small text-center mt-2">
+                            **Nota:** Los valores de 0.00 indican que aún no se ha guardado ninguna calificación en la base de datos para esa columna.
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+            {% elif grupo_seleccionado %}
+                <div class="alert alert-secondary mt-4">No hay datos de estudiantes en este grupo para calcular estadísticas.</div>
+            {% endif %}
+            {# FIN DE LA SECCIÓN DE ESTADÍSTICAS #}
+
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center mt-5 shadow-sm">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            Por favor, seleccione un grupo de curso para gestionar las notas.
+        </div>
+    {% endif %}
+
+    {# Script de JavaScript para el filtro de tabla y GRÁFICOS #}
+    <script>
+        // =======================================================
+        // 1. FUNCIÓN DE FILTRADO (Mantienes la lógica anterior)
+        // =======================================================
+        function filterTable() {
+            var input, filter, table, tbody, tr, td_cui, td_name, i;
+            
+            input = document.getElementById("search_input");
+            filter = input.value.toUpperCase().trim(); 
+            
+            table = document.getElementById("notes_table");
+            if (!table) return; 
+
+            tbody = table.getElementsByTagName("tbody");
+            if (tbody.length === 0) return; 
+
+            tr = tbody[0].getElementsByTagName("tr");
+            
+            for (i = 0; i < tr.length; i++) {
+                if (tr[i].getElementsByTagName("td").length < 2) {
+                    continue; 
+                }
+
+                td_cui = tr[i].getElementsByTagName("td")[0]; 
+                td_name = tr[i].getElementsByTagName("td")[1]; 
+                
+                if (td_cui && td_name) {
+                    var cuiValue = (td_cui.textContent || td_cui.innerText).toUpperCase();
+                    var nameValue = (td_name.textContent || td_name.innerText).toUpperCase();
+                    
+                    if (cuiValue.indexOf(filter) > -1 || nameValue.indexOf(filter) > -1) {
+                        tr[i].style.display = ""; 
+                    } else {
+                        tr[i].style.display = "none"; 
+                    }
+                } else {
+                    tr[i].style.display = "none";
+                }
+            }
+        }
+        
+        // =======================================================
+        // 2. FUNCIÓN DE GRÁFICOS (NUEVA IMPLEMENTACIÓN)
+        // =======================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // Solo intentar renderizar si hay un grupo seleccionado y estudiantes (para evitar errores de script)
+            {% if grupo_seleccionado and estudiantes_matriculados %}
+                
+                // ------------------------------------------
+                // A. GRÁFICO DE BARRAS (Promedio de Notas)
+                // ------------------------------------------
+                const avgData = [];
+                const labels = [];
+                document.querySelectorAll('.stat-avg').forEach(function(td) {
+                    avgData.push(parseFloat(td.getAttribute('data-avg')));
+                    labels.push(td.closest('table').querySelector('thead th:nth-child(' + (Array.from(td.parentNode.children).indexOf(td) + 1) + ')').textContent.split(' ')[0]);
+                });
+
+                // Crear gráfico de barras para promedios
+                new Chart(document.getElementById('avgBarChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Promedio de Nota (0-20)',
+                            data: avgData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 20, // El rango máximo de la nota es 20
+                                title: {
+                                    display: true,
+                                    text: 'Nota Promedio'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+                
+                // ----------------------------------------------------
+                // B. GRÁFICO DE DONA (Aprobados/Desaprobados General)
+                // ----------------------------------------------------
+                // NOTA: Para este ejemplo, simplificaremos asumiendo la nota final es el promedio de EP3. 
+                // En un caso real, el back-end debe calcular el Aprobado/Desaprobado final.
+                
+                // Usaremos la estadística del EP3 como ejemplo. Necesitas pasar esta data del backend.
+                // Como no tenemos el promedio final en el contexto, haremos una simulación basada en EP3 AVG vs Mínima Aprobatoria (ej. 11)
+                
+                // Mejor aún, usaremos los datos reales de EP1 para mostrar un ejemplo simple:
+                const estudiantes = [
+                    {% for matricula in estudiantes_matriculados %}
+                        {% with nota_ep1=matricula|get_attribute:'EP1' %}
+                            {% if nota_ep1 != None %}
+                                {{ nota_ep1|stringformat:"g"|default:"null"|safe }},
+                            {% endif %}
+                        {% endwith %}
+                    {% endfor %}
+                ];
+                
+                let aprobados = 0;
+                let desaprobados = 0;
+                const notaMinima = 11.0; // Definir el umbral de aprobación
+
+                estudiantes.forEach(nota => {
+                    if (nota !== 'null' && nota >= notaMinima) {
+                        aprobados++;
+                    } else if (nota !== 'null' && nota < notaMinima) {
+                        desaprobados++;
+                    }
+                });
+
+                new Chart(document.getElementById('aprobadoDonaChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Aprobados (>= 11)', 'Desaprobados (< 11)', 'Sin Nota'],
+                        datasets: [{
+                            data: [aprobados, desaprobados, {{ estudiantes_matriculados|length }} - (aprobados + desaprobados)],
+                            backgroundColor: [
+                                'rgba(40, 167, 69, 0.8)', // Verde (Success)
+                                'rgba(220, 53, 69, 0.8)',  // Rojo (Danger)
+                                'rgba(108, 117, 125, 0.8)' // Gris (Secondary)
+                            ],
+                            borderColor: '#fff',
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distribución basada en EP1 (Apro. >= 11)'
+                            },
+                            legend: {
+                                position: 'bottom',
+                            }
+                        }
+                    }
+                });
+                // FIN GRÁFICOS
+            {% endif %}
+        });
+    </script>
+{% endblock content %}

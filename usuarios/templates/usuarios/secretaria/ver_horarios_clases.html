@@ -1,0 +1,57 @@
+{% extends "usuarios/secretaria/base_secretaria.html" %}
+
+{% block content %}
+    <h4 class="mb-4">Visualización Global de Horarios</h4>
+    
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label for="filtro_ciclo" class="form-label">Filtrar por Ciclo:</label>
+            <select class="form-select" id="filtro_ciclo">
+                <option selected>VI (2025-II)</option>
+                <option>V (2025-I)</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="filtro_docente" class="form-label">Filtrar por Docente:</label>
+            <select class="form-select" id="filtro_docente">
+                <option selected>Todos los Docentes</option>
+                <option>Ing. Rodríguez Cáceres, P.</option>
+                <option>Lic. Chávez Rivera, A.</option>
+            </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+             <button class="btn btn-primary w-100"><i class="bi bi-file-earmark-arrow-down"></i> Exportar a PDF</button>
+        </div>
+    </div>
+
+    <div class="table-responsive mt-3">
+        <table class="table table-bordered text-center align-middle" style="min-width: 900px;">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width: 10%;">Hora</th>
+                    <th>Lunes</th>
+                    <th>Martes</th>
+                    <th>Miércoles</th>
+                    <th>Jueves</th>
+                    <th>Viernes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>08:00 - 10:00</td>
+                    <td class="bg-warning text-dark">
+                        INF301-A (Teoría)<br>
+                        <small class="text-muted">Docente: Pérez Soto</small>
+                    </td>
+                    <td></td>
+                    <td class="bg-info text-white">
+                        INF202-B (Teoría)<br>
+                        <small>Docente: Ana Mamani</small>
+                    </td>
+                    <td></td>
+                    <td></td>
+                </tr>
+                </tbody>
+        </table>
+    </div>
+{% endblock content %}

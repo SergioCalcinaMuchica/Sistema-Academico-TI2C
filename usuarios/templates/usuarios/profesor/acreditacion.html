@@ -1,0 +1,36 @@
+{% extends "usuarios/profesor/base_profesor.html" %}
+
+{% block content %}
+    <h4 class="mb-4">Acreditación y Documentos del Docente</h4>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Documentos Pendientes</h5>
+            <div class="list-group">
+                <a href="#" class="list-group-item list-group-item-action list-group-item-warning">Subir Fotos de Examanes Calificados</a>
+            </div>
+            
+            <h5 class="mt-4">Subir Nuevo Documento</h5>
+            <form action="#" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="tipo_doc" class="form-label">Tipo de Documento</label>
+                    <select class="form-select" id="tipo_doc" required>
+                        <option value="">Seleccione...</option>
+                        <option value="NotaAlta">Nota Alta</option>
+                        <option value="NotaMedia">Nota Media</option>
+                        <option value="NotaBaja">Nota Baja</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="documento" class="form-label">Archivo (PDF o JPG)</label>
+                    <input class="form-control" type="file" id="documento" name="documento" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Subir Documento</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-center align-items-center mt-5" style="height:20vh;">
+        </div>
+{% endblock content %}

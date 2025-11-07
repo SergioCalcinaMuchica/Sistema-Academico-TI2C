@@ -1,0 +1,61 @@
+{% extends "usuarios/profesor/base_profesor.html" %}
+
+{% block content %}
+    <h4 class="mb-4">Carga académica actual</h4>
+    
+    <div class="card p-3 mb-4 border-primary shadow-sm">
+        <p class="mb-0">
+            <strong>Periodo:</strong> {{ periodo }} | 
+            <strong>Docente:</strong> {{ perfil.nombre }}
+        </p>
+    </div>
+
+    <div class="table-responsive shadow-lg rounded">
+        <table class="table table-striped table-hover align-middle">
+            <thead class="table-primary text-white">
+                <tr>
+                    <th scope="col" class="text-center">Código</th>
+                    <th scope="col">Asignatura</th>
+                    <th scope="col" class="text-center">Grupo</th>
+                    <th scope="col" class="text-center">Tipo</th>
+                    <th scope="col" class="text-center">Créditos</th> {# VUELVE A CRÉDITOS (Fácil de sacar) #}
+                    <th scope="col" class="text-center">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# Iterar sobre la lista de GrupoCurso asignados #}
+                {% for grupo in carga_academica %}
+                <tr>
+                    <td class="text-center">{{ grupo.curso.id }}</td> 
+                    <td><strong>{{ grupo.curso.nombre }}</strong></td>
+                    <td class="text-center">{{ grupo.grupo }}</td>
+                    <td class="text-center">
+                        <span class="badge bg-{% if grupo.tipo == 'Teoría' %}info{% else %}success{% endif %}">
+                            {{ grupo.tipo }}
+                        </span>
+                    </td>
+                    <td class="text-center">{{ grupo.curso.creditos }}</td> {# Muestra el campo Créditos #}
+                    <td class="text-center">
+                        
+                        {# Mostrar la acción de Subir Notas, redirigiendo temporalmente al dashboard. #}
+                        <a href="{% url 'usuarios:dashboard_profesor' %}" class="btn btn-sm btn-warning shadow-sm">
+                            <i class="bi bi-upload me-1"></i> Subir Notas (Temp)
+                        </a>
+
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center p-4 text-muted">
+                        El profesor {{ perfil.nombre }} no tiene carga académica asignada para el periodo actual ({{ periodo }}).
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
+        <p class="text-muted small">Nota: Todos los enlaces de acción redirigen temporalmente al Dashboard hasta su implementación final.</p>
+    </div>
+{% endblock content %}

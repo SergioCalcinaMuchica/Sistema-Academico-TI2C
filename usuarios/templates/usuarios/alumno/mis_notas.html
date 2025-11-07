@@ -1,0 +1,166 @@
+{% extends "usuarios/alumno/base_alumno.html" %}
+
+{% block content %}
+    <h4 class="mb-4 text-dark fw-bold">Mis Notas por Curso</h4>
+    
+    {# BLOQUE DE SELECCIÓN DE CURSO #}
+    <div class="row mb-4">
+        <div class="col-md-8 col-lg-6">
+            <label for="curso_select" class="form-label"><strong>Seleccionar Curso para ver Notas:</strong></label>
+            <select class="form-select shadow-sm" id="curso_select" onchange="window.location.href='?curso=' + this.value">
+                <option value="">-- Elija un Curso --</option>
+                {% for curso in cursos_matriculados %}
+                    <option value="{{ curso.curso_id }}" 
+                            {% if curso.curso_id == curso_id_seleccionado %}selected{% endif %}>
+                        {{ curso.curso_id }} - {{ curso.nombre_curso }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    {% if curso_seleccionado_data %}
+        
+        {% with total_evaluaciones=curso_seleccionado_data.notas|length %}
+            
+            <div class="card p-4 mt-4 shadow-sm border-0 bg-white">
+                <h5 class="card-title text-dark fw-bold border-bottom pb-2 mb-3">Detalle de Notas: {{ curso_seleccionado_data.id }} - {{ curso_seleccionado_data.nombre }}</h5>
+                
+                <p class="text-secondary small">Profesor: <strong>{{ curso_seleccionado_data.profesor }}</strong> | Grupo: <strong>{{ curso_seleccionado_data.grupo }}</strong></p>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover text-center">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Evaluación</th>
+                                <th>Peso (%)</th>
+                                <th>Nota</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for nota_detalle in curso_seleccionado_data.notas %}
+                                <tr>
+                                    <td>{{ nota_detalle.nombre }}</td>
+                                    <td>{{ nota_detalle.peso }}%</td>
+                                    <td>
+                                        {% if nota_detalle.nota != 'N/A' %}
+                                            
+                                            {% with nota_display=nota_detalle.nota|floatformat:0 %}
+                                                {% with nota_comparable=nota_display|add:0 %} 
+                                                    <span class="badge fs-6 
+                                                        {% if nota_comparable >= 14 %}
+                                                            bg-success
+                                                        {% elif nota_comparable >= 11 %}
+                                                            bg-warning text-dark
+                                                        {% else %}
+                                                            bg-danger
+                                                        {% endif %}">
+                                                        {{ nota_display }}
+                                                    </span>
+                                                {% endwith %}
+                                            {% endwith %}
+                                        
+                                        {% else %}
+                                            <span class="badge bg-secondary fs-6">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-dark">
+                                <td colspan="2" class="text-end"><strong>Promedio Final Estimado</strong></td>
+                                <td><strong>{{ curso_seleccionado_data.promedio_final }}</strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <hr class="mt-3">
+                
+                {# 3. DISPLAY DE NOTAS MÍNIMAS REQUERIDAS #}
+                <h6 class="fw-bold mb-3 text-primary text-center">💡 Análisis de Meta para Aprobar (Nota Mínima 10.5)</h6>
+                
+                {% if curso_seleccionado_data.missing_evaluations_count > 0 %}
+                    
+                    {% if curso_seleccionado_data.is_impossible %}
+                        {# Caso: Imposible de Aprobar #}
+                        <div class="alert alert-danger text-center small mt-3">
+                            ⚠️ <strong>ATENCIÓN: Es matemáticamente imposible aprobar.</strong> Necesitas un promedio de <strong>{{ curso_seleccionado_data.required_avg_grade|floatformat:2 }}</strong> en las notas faltantes (superior a 20).
+                            <p class="mb-0 mt-2">A continuación, el promedio máximo que podrías alcanzar:</p>
+                        </div>
+                    
+                    {% elif curso_seleccionado_data.required_avg_grade|floatformat:0|add:0 <= 0 %}
+                        {# Caso: Ya Aprobado #}
+                        <div class="alert alert-success text-center small mt-3">
+                            🎉 <strong>¡Felicidades!</strong> Ya tienes el puntaje ponderado necesario para <strong>aprobar</strong> (10.5), incluso con un 0 en las {{ curso_seleccionado_data.missing_evaluations_count }} evaluaciones restantes.
+                        </div>
+                    
+                    {% else %}
+                        {# Caso: Aún es posible aprobar #}
+                        <div class="alert alert-warning text-center small mt-3">
+                            🎯 <strong>Estrategia:</strong> Aún es posible aprobar. Necesitas un promedio mínimo de <strong>{{ curso_seleccionado_data.required_avg_grade|floatformat:2 }}</strong> en las notas faltantes.
+                            <p class="mb-0 mt-2">A continuación, combinaciones de notas que te harían aprobar:</p>
+                        </div>
+                    {% endif %}
+
+                    {% if curso_seleccionado_data.approval_scenarios %}
+                        <h6 class="mt-4 mb-2 text-dark text-center">Combinaciones de Notas para Promedio Final de {{ curso_seleccionado_data.approval_scenarios.0.final_average }}</h6>
+                        <div class="table-responsive small">
+                            <table class="table table-bordered table-sm text-center">
+                                <thead class="table-secondary">
+                                    {# Usamos el nombre y peso de la primera fila de escenarios para el encabezado #}
+                                    {% with scenario=curso_seleccionado_data.approval_scenarios.0 %}
+                                        <tr>
+                                            <th>{{ scenario.N1_name }} ({{ scenario.N1_weight }}%)</th>
+                                            <th>{{ scenario.N2_name }} ({{ scenario.N2_weight }}%)</th>
+                                            <th>Promedio Final</th>
+                                            <th>Resultado</th>
+                                        </tr>
+                                    {% endwith %}
+                                </thead>
+                                <tbody>
+                                    {% for scenario in curso_seleccionado_data.approval_scenarios %}
+                                        <tr>
+                                            <td><strong>{{ scenario.N1_grade }}</strong></td>
+                                            <td><strong>{{ scenario.N2_grade }}</strong></td>
+                                            <td><strong>{{ scenario.final_average|floatformat:1 }}</strong></td>
+                                            <td>
+                                                {% if scenario.is_passing %}
+                                                    ✅ Aprobado
+                                                {% else %}
+                                                    ❌ Desaprobado (pipipi)
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                         {# Mensaje si no hay escenarios (ej: solo falta 1 nota) #}
+                        <div class="alert alert-info text-center small mt-3">
+                            ℹ️ El análisis de combinaciones es relevante cuando faltan 2 o más evaluaciones importantes.
+                        </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-info p-2 text-center small mt-3">
+                        🔔 <strong>Avance:</strong> Faltan <strong>{{ curso_seleccionado_data.missing_evaluations_count }} de {{ total_evaluaciones }}</strong> notas por registrar. Porcentaje de curso cubierto: <strong>{{ curso_seleccionado_data.total_porcentaje }}%</strong>.
+                    </div>
+                    
+                {% else %}
+                    {# Caso: Todas las notas están registradas #}
+                    <div class="alert alert-success text-center small mt-3">
+                        ✅ <strong>Notas Completas:</strong> Tienes todas tus <strong>{{ total_evaluaciones }} evaluaciones</strong> registradas. Tu promedio final es <strong>{{ curso_seleccionado_data.promedio_final }}</strong>.
+                    </div>
+                {% endif %}
+
+            </div>
+        {% endwith %}
+        
+    {% else %}
+        <div class="alert alert-info mt-4 shadow-sm" role="alert">
+            Seleccione un curso de la lista para ver el detalle de sus notas.
+        </div>
+    {% endif %}
+{% endblock content %}

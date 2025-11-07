@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login de {{ rol }} - UNSA</title>
+  <link rel="icon" href="{% static 'imgs/favicon1.jpg' %}" type="image/png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    /* ... (MANTENER TODOS TUS ESTILOS CSS AQUÍ) ... */
+    body { background-color: #f4f3f8; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .login-card { background-color: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); width: 100%; max-width: 400px; padding: 30px; }
+    .login-card h3 { text-align: center; color: #6b1616; margin-bottom: 25px; font-weight: 600; }
+    .btn-primary { background-color: #6b1616; border: none; }
+    .btn-primary:hover { background-color: #743434; }
+    .logo { display: flex; justify-content: center; margin-bottom: 15px; }
+    .logo img { width: 70px; }
+    .bg-carousel { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+    .bg-carousel .carousel-item img { object-fit: cover; width: 100%; height: 100vh; filter: brightness(0.6); }
+  </style>
+</head>
+<body>
+  <div id="bgCarousel" class="carousel slide bg-carousel" data-bs-ride="carousel" data-bs-interval="5000">
+    <div class="carousel-inner">
+      <div class="carousel-item active">
+        <img src="{% static 'imgs/fondo1.jpeg' %}" class="d-block w-100" alt="Fondo 1">
+      </div>
+      <div class="carousel-item">
+        <img src="{% static 'imgs/fondo2.jpg' %}" class="d-block w-100" alt="Fondo 2">
+      </div>
+      <div class="carousel-item">
+        <img src="{% static 'imgs/fondo3.jpg' %}" class="d-block w-100" alt="Fondo 3">
+      </div>
+    </div>
+  </div>
+
+  <div class="login-card">
+    <div class="logo">
+      <img src="{% static 'imgs/LOGO_UNSA.png' %}" alt="Logo unsa" class="img-fluid" style="width:300px;">
+    </div>
+    <h3>Ingreso de {{ rol|capfirst }}</h3>
+    
+    {% for message in messages %}
+      <div class="alert alert-danger" role="alert">{{ message }}</div>
+    {% endfor %}
+
+    <form method="POST">
+        {% csrf_token %} <div class="mb-3">
+            <label for="email" class="form-label">Correo institucional</label>
+            <input type="email" class="form-control" id="email" name="email" placeholder="ejemplo@unsa.edu.pe" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="password" class="form-label">Contraseña</label>
+            <input type="password" class="form-control" id="password" name="password" placeholder="Ingrese su contraseña" required>
+        </div>
+
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Iniciar sesión</button>
+        </div>
+    </form>
+
+    <div class="text-center mt-3">
+      <a href="{% url 'usuarios:selector_rol' %}" class="text-secondary" style="font-size: 14px;">Volver a selección de rol</a>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

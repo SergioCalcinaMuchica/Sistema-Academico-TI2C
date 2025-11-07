@@ -1,0 +1,62 @@
+{% extends "usuarios/alumno/base_alumno.html" %}
+
+{% block content %}
+    <h4 class="mb-4 fw-bold">📚 Mis Cursos Matriculados</h4>
+    
+    <div class="card p-3 mb-4 shadow-sm">
+        <p class="mb-0"><strong>Alumno:</strong> {{ perfil.nombre }}</p>
+    </div>
+
+    {% if cursos_info %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">Código</th>
+                        <th scope="col">Asignatura</th>
+                        <th scope="col">Grupo (Teoría)</th>
+                        <th scope="col">Docente (Teoría)</th>
+                        <th scope="col">Grupo (Lab)</th>
+                        <th scope="col">Docente (Lab)</th>
+                        <th scope="col" class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for curso in cursos_info %}
+                        <tr>
+                            <td><strong>{{ curso.curso_id }}</strong></td>
+                            <td>{{ curso.nombre_curso }}</td>
+                            <td><span class="badge bg-primary">{{ curso.grupo_teoria }}</span></td>
+                            <td>{{ curso.profesor_teoria }}</td>
+                            <td>
+                                {% if curso.grupo_lab == 'N/A' %}
+                                    <span class="badge bg-danger">N/A</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ curso.grupo_lab }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ curso.profesor_lab }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'usuarios:mis_notas_alumno' %}?curso={{ curso.curso_id }}" class="btn btn-sm btn-info text-white me-2">Ver Notas</a>
+                                
+                                {% if curso.grupo_lab == 'N/A' %}
+                                <a href="{% url 'usuarios:matricula_lab_alumno' %}" class="btn btn-sm btn-warning">Asignar Lab</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-warning text-center mt-5">
+            <strong>¡Aviso!</strong> No se encontraron cursos activos matriculados para el ciclo actual.
+        </div>
+    {% endif %}
+    
+    <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
+        <p class="text-muted">Aquí solo se muestran los cursos del ciclo actual y en estado activo.</p>
+    </div>
+{% endblock content %}

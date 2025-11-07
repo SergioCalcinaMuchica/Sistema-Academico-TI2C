@@ -1,0 +1,146 @@
+{% extends "usuarios/profesor/base_profesor.html" %}
+
+{% block content %}
+    <h4 class="mb-4">📋 Registro de Asistencia por Grupo</h4>
+    
+    <div class="row mb-4">
+        
+        <div class="col-md-5">
+            <label for="grupo_select" class="form-label fw-bold">Seleccionar Grupo de Clase:</label>
+            <select class="form-select" id="grupo_select">
+                <option value="" disabled {% if not grupo_id_url %}selected{% endif %}>-- Elija un Grupo --</option>
+                {% for grupo in grupos_asignados %}
+                    <option value="{{ grupo.id }}" {% if grupo.id == grupo_id_url %}selected{% endif %}>
+                        {{ grupo.curso.id }} - {{ grupo.curso.nombre }} (Grupo {{ grupo.grupo }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="col-md-3">
+            <label for="fecha_input" class="form-label fw-bold">Fecha de la Sesión:</label>
+            <input type="date" class="form-control" id="fecha_input" value="{{ fecha_url }}">
+        </div>
+        
+        <div class="col-md-4 d-flex align-items-end">
+             <button id="cargar_btn" class="btn btn-primary w-100">Cargar Lista / Continuar</button>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('cargar_btn').addEventListener('click', function() {
+            const grupoId = document.getElementById('grupo_select').value;
+            const fecha = document.getElementById('fecha_input').value;
+            if (grupoId && fecha) {
+                window.location.href = '{% url "usuarios:registro_asistencia" %}?grupo=' + grupoId + '&fecha=' + fecha;
+            } else {
+                alert('Por favor, seleccione un grupo y una fecha.');
+            }
+        });
+    </script>
+    
+    {% if grupo_seleccionado %}
+        <hr>
+        <div class="alert alert-info small py-2 mb-4">
+            <i class="bi bi-calendar-check me-2"></i>
+            <b>Historial de Asistencia:</b>
+            {% if historial_fechas %}
+                {% for fecha in historial_fechas|slice:":5" %}
+                    <a href="{% url 'usuarios:registro_asistencia' %}?grupo={{ grupo_id_url }}&fecha={{ fecha|date:'Y-m-d' }}" class="badge bg-secondary me-1">
+                        {{ fecha|date:"d/m/Y" }}
+                    </a>
+                {% endfor %}
+                {% if historial_fechas|length > 5 %}
+                    <span class="text-muted small ms-1">... y más ({{ historial_fechas|length }})</span>
+                {% endif %}
+            {% else %}
+                Aún no hay registros de asistencia para este grupo.
+            {% endif %}
+        </div>
+        
+        <div class="card p-3 mt-4 shadow-lg">
+            
+            {% if asistencia_guardada %}
+                <div class="alert alert-success small p-2 mb-3">
+                    Asistencia para el <b>{{ fecha_url }}</b> <b>CARGADA</b>. Los estados ya están seleccionados.
+                </div>
+            {% endif %}
+
+            <h5 class="card-title text-primary">
+                {{ grupo_seleccionado.curso.nombre }} (Grupo {{ grupo_seleccionado.grupo }}) 
+                <span class="badge bg-secondary ms-2">{{ estudiantes_matriculados|length }} Alumnos</span>
+            </h5>
+            <p class="text-muted small">Sesión del día: <b>{{ fecha_url }}</b></p>
+            
+            <form action="{% url 'usuarios:registro_asistencia' %}" method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="grupo_id" value="{{ grupo_seleccionado.id }}">
+                <input type="hidden" name="fecha_sesion" value="{{ fecha_url }}">
+                
+                {% if estudiantes_matriculados %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 15%;">Código</th>
+                                    <th>Nombre del Estudiante</th>
+                                    <th class="text-center" style="width: 30%;">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {# Iterar sobre los estudiantes cargados #}
+                                {% for estudiante in estudiantes_matriculados %}
+                                <tr>
+                                    <td>{{ estudiante.cui }}</td>
+                                    <td>{{ estudiante.nombre }}</td>
+                                    <td class="text-center">
+                                        <div class="d-flex justify-content-around align-items-center">
+                                            
+                                            {# Radio: Asistió (Presente) #}
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="asistencia_{{ estudiante.cui }}" 
+                                                       id="asistio_{{ estudiante.cui }}" 
+                                                       value="A" 
+                                                       {% if estudiante.estado == 'A' %}checked{% endif %}
+                                                       required>
+                                                <label class="form-check-label" for="asistio_{{ estudiante.cui }}">Asistió</label>
+                                            </div>
+                                            
+                                            {# Radio: Faltó (Falta) #}
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" 
+                                                       name="asistencia_{{ estudiante.cui }}" 
+                                                       id="falto_{{ estudiante.cui }}" 
+                                                       value="F" 
+                                                       {% if estudiante.estado == 'F' %}checked{% endif %}
+                                                       required>
+                                                <label class="form-check-label" for="falto_{{ estudiante.cui }}">Faltó</label>
+                                            </div>
+                                            
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success d-block w-100 mt-3 btn-lg">
+                        <i class="bi bi-save me-2"></i> Guardar Asistencia ({{ estudiantes_matriculados|length }} Estudiantes)
+                    </button>
+                    
+                {% else %}
+                    <div class="alert alert-warning text-center">
+                        No se encontraron estudiantes matriculados para este grupo.
+                    </div>
+                {% endif %}
+            </form>
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center mt-5">
+            Por favor, seleccione un grupo y una fecha para cargar la lista de asistencia.
+        </div>
+    {% endif %}
+
+{% endblock content %}

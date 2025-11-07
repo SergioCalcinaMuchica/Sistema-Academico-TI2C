@@ -1,0 +1,81 @@
+{% extends "usuarios/alumno/base_alumno.html" %}
+
+{% block content %}
+    <h4 class="mb-4 fw-bold">🔬 Selección y Matrícula de Laboratorio</h4>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    {% if labs_disponibles %}
+        <div class="alert alert-info p-3 mb-4">
+            <h5 class="alert-heading fw-bold">Tienes Laboratorios Pendientes</h5>
+            <p class="mb-0">A continuación, se muestran los grupos de laboratorio disponibles para tus cursos matriculados en teoría y en los que <b>aún no tienes un laboratorio asignado</b>.</p>
+            <p class="mb-0 text-danger">⚠️ <b>Restricción:</b> Solo puedes seleccionar un grupo por curso y debe ser <b>compatible con tu horario</b> (no debe haber cruces).</p>
+        </div>
+    
+        <h5 class="mb-3 text-primary">Grupos Disponibles para Matrícula</h5>
+        
+        <div class="row">
+            {% for lab in labs_disponibles %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100 shadow-sm border-primary">
+                        <div class="card-body">
+                            <h6 class="card-title fw-bold text-primary">{{ lab.codigo_curso }} - {{ lab.nombre_curso }}</h6>
+                            <hr class="mt-1 mb-2">
+                            <ul class="list-unstyled mb-3 small">
+                                <li><strong>Grupo:</strong> <span class="badge bg-secondary">{{ lab.grupo }}</span></li>
+                                <li><strong>Docente:</strong> {{ lab.docente }}</li>
+                                <li><strong>Aula:</strong> Laboratorio {{ lab.aula }}</li>
+                                <li class="mt-1"><strong>Horario(s):</strong></li>
+                                <ul>
+                                    {% for horario in lab.horarios %}
+                                        <li class="fst-italic">{{ horario }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </ul>
+                            
+                            <form method="post" action="{% url 'usuarios:matricula_lab_alumno' %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="lab_id" value="{{ lab.id }}">
+                                <button type="submit" class="btn btn-sm btn-success w-100" 
+                                        onclick="return confirm('¿Confirmas tu matrícula en el Grupo {{ lab.grupo }} del curso {{ lab.codigo_curso }}?');">
+                                    Matricularme en este Grupo
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        {% if labs_matriculados_info %}
+            <div class="alert alert-success p-4">
+                <h5 class="alert-heading fw-bold">✅ Ya tienes laboratorios asignados:</h5>
+                <ul class="list-unstyled mt-3">
+                    {% for mat_lab in labs_matriculados_info %}
+                        <li>
+                            <strong class="text-success">{{ mat_lab.laboratorio.grupo_curso.curso.nombre }}</strong> 
+                            (Grupo {{ mat_lab.laboratorio.grupo_curso.grupo }}) - Docente: {{ mat_lab.laboratorio.grupo_curso.profesor.perfil.nombre }}
+                        </li>
+                    {% endfor %}
+                </ul>
+                <p class="mb-0">No hay más grupos de laboratorio disponibles para matricularte en este momento.</p>
+            </div>
+        {% else %}
+            <div class="alert alert-warning p-4">
+                <h5 class="alert-heading fw-bold">⚠️ No hay opciones disponibles</h5>
+                <p>No se encontraron grupos de laboratorio disponibles para los cursos de teoría en los que estás matriculado, o ya tienes todos tus laboratorios asignados.</p>
+            </div>
+        {% endif %}
+    {% endif %}
+    
+    <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
+        <p class="text-muted">Si tienes algún inconveniente o crees que falta un laboratorio, contacta a Secretaría Académica.</p>
+    </div>
+{% endblock content %}

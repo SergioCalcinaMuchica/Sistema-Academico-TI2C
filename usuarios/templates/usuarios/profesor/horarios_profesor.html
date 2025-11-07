@@ -1,0 +1,70 @@
+{% extends "usuarios/profesor/base_profesor.html" %}
+
+{% block content %}
+    <h4 class="mb-4 fw-bold">📅 Horario de Clase Asignado</h4>
+    
+    {% if horario_con_conflicto %}
+        <div class="alert alert-danger text-center shadow-sm">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> 
+            <strong>¡Advertencia!</strong> Se ha detectado un **choque de horario** en tu asignación de clases. Consulta la consola del servidor para más detalles.
+        </div>
+    {% endif %}
+
+    {% if horario_consolidado %}
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle" style="min-width: 800px;">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 10%;">Hora</th>
+                        {% for dia in dias %}
+                            <th>{{ dia }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Iteramos sobre la lista consolidada que contiene rango y datos de fila #}
+                    {% for fila in horario_consolidado %}
+                        <tr>
+                            <td class="table-secondary fw-bold">{{ fila.rango }}</td>
+                            
+                            {# Iteramos sobre los datos de la fila (los 5 días) #}
+                            {% for bloque in fila.data %}
+                                {% if bloque %}
+                                    <td class="{{ bloque.color }} text-white p-2">
+                                        <div class="fw-bold">{{ bloque.nombre }}</div>
+                                        <small>{{ bloque.codigo_grupo }} ({{ bloque.tipo }})</small>
+                                        <br>
+                                        {# Muestra el ID del aula, que ahora es aula_nombre en la vista #}
+                                        <i class="bi bi-geo-alt-fill me-1"></i> <small>Aula {{ bloque.aula_nombre }}</small>
+                                    </td>
+                                {% else %}
+                                    <td class="bg-light-subtle text-muted small p-2">Libre</td>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-4">
+            <h5>Leyenda de Cursos</h5>
+            <div class="d-flex flex-wrap gap-2">
+                {# Iteramos sobre la lista de leyenda pre-procesada en la vista (Leyenda Simplificada) #}
+                {% for curso in leyenda_cursos %}
+                    <span class="badge {{ curso.color }} p-2">{{ curso.nombre }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        
+    {% else %}
+        <div class="alert alert-info text-center mt-5">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            Actualmente, no tienes bloques de horario asignados para ningún curso.
+        </div>
+    {% endif %}
+    
+    <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
+        <p class="text-muted">La tabla muestra los horarios de clase asignados a tu perfil docente.</p>
+    </div>
+{% endblock content %}
