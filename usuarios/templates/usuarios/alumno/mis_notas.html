@@ -28,8 +28,9 @@
                 
                 <p class="text-secondary small">Profesor: <strong>{{ curso_seleccionado_data.profesor }}</strong> | Grupo: <strong>{{ curso_seleccionado_data.grupo }}</strong></p>
 
+                {# TABLA DE NOTAS #}
                 <div class="table-responsive">
-                    <table class="table table-bordered table-striped table-hover text-center">
+                    <table class="table table-bordered table-striped table-hover text-center align-middle">
                         <thead class="table-dark">
                             <tr>
                                 <th>Evaluación</th>
@@ -59,7 +60,7 @@
                                                     </span>
                                                 {% endwith %}
                                             {% endwith %}
-                                        
+                                            
                                         {% else %}
                                             <span class="badge bg-secondary fs-6">N/A</span>
                                         {% endif %}
@@ -75,10 +76,31 @@
                         </tfoot>
                     </table>
                 </div>
-
+                
                 <hr class="mt-3">
                 
-                {# 3. DISPLAY DE NOTAS MÍNIMAS REQUERIDAS #}
+                {# BLOQUE DE GRÁFICOS INDIVIDUALES #}
+                <h6 class="fw-bold mb-3 text-primary text-center">📊 Análisis Visual del Curso</h6>
+                <div class="row mb-5">
+                    
+                    <div class="col-md-4">
+                        <div class="card h-100 p-3 shadow-sm border-primary border-3 border-bottom">
+                            <h6 class="text-center small fw-bold">1. Avance Ponderado (%)</h6>
+                            <canvas id="progressDoughnutChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="card h-100 p-3 shadow-sm border-primary border-3 border-bottom">
+                            <h6 class="text-center small fw-bold">2. Desempeño por Evaluación (Nota vs. Peso)</h6>
+                            <canvas id="gradePerformanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+                
+                {# BLOQUE DE ANÁLISIS DE META (Tu código existente) #}
                 <h6 class="fw-bold mb-3 text-primary text-center">💡 Análisis de Meta para Aprobar (Nota Mínima 10.5)</h6>
                 
                 {% if curso_seleccionado_data.missing_evaluations_count > 0 %}
@@ -138,7 +160,6 @@
                             </table>
                         </div>
                     {% else %}
-                         {# Mensaje si no hay escenarios (ej: solo falta 1 nota) #}
                         <div class="alert alert-info text-center small mt-3">
                             ℹ️ El análisis de combinaciones es relevante cuando faltan 2 o más evaluaciones importantes.
                         </div>
@@ -157,10 +178,21 @@
 
             </div>
         {% endwith %}
-        
     {% else %}
         <div class="alert alert-info mt-4 shadow-sm" role="alert">
             Seleccione un curso de la lista para ver el detalle de sus notas.
         </div>
     {% endif %}
+
+    {# BLOQUE DE GRÁFICO GENERAL (Siempre visible, debajo del contenido de selección) #}
+    <div class="card p-4 mt-4 shadow-lg border-0 bg-light">
+        <h5 class="text-dark fw-bold border-bottom pb-2 mb-3">🌎 Resumen General de Promedios</h5>
+        <div class="row">
+            <div class="col-12">
+                <div class="card p-3 shadow-sm border-secondary border-3 border-bottom">
+                    <canvas id="generalAverageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock content %}

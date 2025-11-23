@@ -58,5 +58,202 @@
  </div>
 
  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+ {% block extra_js %}
+    
+    {% if curso_seleccionado_data %}
+        {{ curso_seleccionado_data|json_script:"curso-data" }}
+    {% endif %}
+
+    {{ promedios_generales|json_script:"general-data" }}
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // ==========================================================
+            // A. GRÁFICOS INDIVIDUALES (Se cargan solo si hay datos)
+            // ==========================================================
+            
+            const cursoDataScript = document.getElementById('curso-data');
+            // Usamos JSON.parse(textContent) para leer los datos incrustados de forma segura
+            const cursoData = cursoDataScript ? JSON.parse(cursoDataScript.textContent) : null;
+            
+            if (cursoData && cursoData.id) {
+                
+                // --- GRÁFICO 1: DONA DE DISTRIBUCIÓN DE NOTAS OBTENIDAS ---
+               const ctxDoughnut = document.getElementById('progressDoughnutChart');
+               if (ctxDoughnut) { // Verificamos que el canvas exista antes de inicializar
+                  new Chart(ctxDoughnut, {
+                     type: 'doughnut',
+                     data: {
+                           // Asegúrate de que NOTA_MINIMA_APROBACION esté disponible en el contexto de la plantilla
+                           labels: ['Aprobado (>= {{ NOTA_MINIMA_APROBACION }})', 'Reprobado', 'Pendiente'],
+                           datasets: [{
+                              // USANDO LOS NUEVOS DATOS DEL BACKEND (que ahora sí existen)
+                              data: [
+                                 cursoData.ponderacion_aprobada,
+                                 cursoData.ponderacion_reprobada,
+                                 cursoData.ponderacion_pendiente
+                              ],
+                              // Colores temáticos (Verde, Rojo, Gris)
+                              backgroundColor: ['#198754', '#dc3545', '#adb5bd'], 
+                              hoverOffset: 4
+                           }]
+                     },
+                     options: {
+                           responsive: true,
+                           plugins: {
+                              title: {
+                                 display: true,
+                                 text: 'Distribución Ponderada de Notas (Ponderación Total: 100%)',
+                                 font: { size: 16 }
+                              },
+                              legend: {
+                                 position: 'bottom',
+                              },
+                              tooltip: {
+                                 callbacks: {
+                                       label: function(context) {
+                                          let label = context.label || '';
+                                          if (label) {
+                                             label += ': ';
+                                          }
+                                          if (context.parsed !== null) {
+                                             // Muestra el porcentaje
+                                             label += context.parsed.toFixed(1) + '%'; 
+                                          }
+                                          return label;
+                                       }
+                                 }
+                              }
+                           }
+                     }
+                  });
+               }
+                
+                // --- GRÁFICO 2: BARRAS DE DESEMPEÑO POR EVALUACIÓN ---
+                const ctxBar = document.getElementById('gradePerformanceChart');
+                const grades = cursoData.chart_bar_grades;
+                const weights = cursoData.chart_bar_weights;
+                
+                // Colores basados en la nota (similar al badge del HTML)
+                const gradeColors = grades.map(grade => {
+                    if (grade >= 14) return '#198754'; // success (Verde)
+                    if (grade >= 11) return '#ffc107'; // warning (Amarillo)
+                    return '#dc3545'; // danger (Rojo)
+                });
+                
+                new Chart(ctxBar, {
+                    type: 'bar',
+                    data: {
+                        labels: cursoData.chart_bar_labels,
+                        datasets: [
+                            {
+                                label: 'Nota Obtenida (0-20)',
+                                data: grades,
+                                backgroundColor: gradeColors,
+                                yAxisID: 'y',
+                                order: 2
+                            },
+                            {
+                                label: 'Peso Ponderado (%)',
+                                data: weights,
+                                type: 'line',
+                                borderColor: '#0d6efd',
+                                borderWidth: 2,
+                                fill: false,
+                                yAxisID: 'y1',
+                                order: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                max: 20,
+                                min: 0,
+                                title: { display: true, text: 'Nota' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                max: 100,
+                                min: 0,
+                                title: { display: true, text: 'Peso (%)' },
+                                grid: { drawOnChartArea: false } // Oculta líneas del eje Y secundario
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // ==========================================================
+            // B. GRÁFICO GENERAL DE PROMEDIOS (Siempre se carga)
+            // ==========================================================
+            const generalDataScript = document.getElementById('general-data');
+            // Usamos JSON.parse(textContent) para leer los datos incrustados de forma segura
+            const generalData = JSON.parse(generalDataScript.textContent);
+            
+            if (generalData.length > 0) {
+                const ctxGeneral = document.getElementById('generalAverageChart');
+                const generalLabels = generalData.map(d => d.nombre);
+                const generalGrades = generalData.map(d => d.promedio_final);
+                
+                // Colores basados en el promedio (Aprobado >= 10.5)
+                const generalColors = generalGrades.map(grade => {
+                    return grade >= 10.5 ? '#198754' : '#dc3545'; // Verde (Aprobado) o Rojo (Desaprobado)
+                });
+
+                new Chart(ctxGeneral, {
+                    type: 'bar',
+                    data: {
+                        labels: generalLabels,
+                        datasets: [{
+                            label: 'Promedio Final Estimado (0-20)',
+                            data: generalGrades,
+                            backgroundColor: generalColors,
+                            borderColor: generalColors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', // Hace las barras horizontales
+                        responsive: true,
+                        scales: {
+                            x: {
+                                max: 20,
+                                min: 0,
+                                title: { display: true, text: 'Promedio Estimado' },
+                                ticks: { stepSize: 5 }
+                            },
+                            y: {
+                                grid: { display: false }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'Comparación de Promedios' },
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+{% endblock extra_js %}
+
 </body>
 </html>
