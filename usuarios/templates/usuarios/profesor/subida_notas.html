@@ -194,6 +194,12 @@
                         <div class="card shadow-sm border-secondary h-100">
                             <div class="card-header bg-secondary text-white fw-bold">Porcentaje de Aprobados/Desaprobados (Promedio Final)</div>
                             <div class="card-body">
+                                <label class="fw-bold">Evaluación para cálculo:</label>
+                                <select id="selectEvaluacion" class="form-select form-select-sm mb-3">
+                                    {% for campo in campos_nota %}
+                                        <option value="{{ campo }}">{{ campo }}</option>
+                                    {% endfor %}
+                                </select>
                                 <canvas id="aprobadoDonaChart"></canvas>
                             </div>
                         </div>
@@ -270,6 +276,21 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Solo intentar renderizar si hay un grupo seleccionado y estudiantes (para evitar errores de script)
             {% if grupo_seleccionado and estudiantes_matriculados %}
+                const notasPorEvaluacion = {
+                    {% for campo in campos_nota %}
+                        "{{ campo }}": [
+                            {% for matricula in estudiantes_matriculados %}
+                                {% with nota_val=matricula|get_attribute:campo %}
+                                    {% if nota_val != None %}
+                                        {{ nota_val|stringformat:"g"|safe }},
+                                    {% else %}
+                                        null,
+                                    {% endif %}
+                                {% endwith %}
+                            {% endfor %}
+                        ],
+                    {% endfor %}
+                };
                 
                 // ------------------------------------------
                 // A. GRÁFICO DE BARRAS (Promedio de Notas)
@@ -317,63 +338,67 @@
                 // ----------------------------------------------------
                 // B. GRÁFICO DE DONA (Aprobados/Desaprobados General)
                 // ----------------------------------------------------
-                // NOTA: Para este ejemplo, simplificaremos asumiendo la nota final es el promedio de EP3. 
-                // En un caso real, el back-end debe calcular el Aprobado/Desaprobado final.
-                
-                // Usaremos la estadística del EP3 como ejemplo. Necesitas pasar esta data del backend.
-                // Como no tenemos el promedio final en el contexto, haremos una simulación basada en EP3 AVG vs Mínima Aprobatoria (ej. 11)
-                
-                // Mejor aún, usaremos los datos reales de EP1 para mostrar un ejemplo simple:
-                const estudiantes = [
-                    {% for matricula in estudiantes_matriculados %}
-                        {% with nota_ep1=matricula|get_attribute:'EP1' %}
-                            {% if nota_ep1 != None %}
-                                {{ nota_ep1|stringformat:"g"|default:"null"|safe }},
-                            {% endif %}
-                        {% endwith %}
-                    {% endfor %}
-                ];
-                
-                let aprobados = 0;
-                let desaprobados = 0;
-                const notaMinima = 11.0; // Definir el umbral de aprobación
+                let graficoDona = null;
+                const notaMinima = 11;
 
-                estudiantes.forEach(nota => {
-                    if (nota !== 'null' && nota >= notaMinima) {
-                        aprobados++;
-                    } else if (nota !== 'null' && nota < notaMinima) {
-                        desaprobados++;
-                    }
-                });
+                function actualizarGraficoDona(campo) {
+                    const estudiantes = notasPorEvaluacion[campo];
+                    let aprobados = 0;
+                    let desaprobados = 0;
+                    let vacios = 0;
 
-                new Chart(document.getElementById('aprobadoDonaChart'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Aprobados (>= 11)', 'Desaprobados (< 11)', 'Sin Nota'],
-                        datasets: [{
-                            data: [aprobados, desaprobados, {{ estudiantes_matriculados|length }} - (aprobados + desaprobados)],
-                            backgroundColor: [
-                                'rgba(40, 167, 69, 0.8)', // Verde (Success)
-                                'rgba(220, 53, 69, 0.8)',  // Rojo (Danger)
-                                'rgba(108, 117, 125, 0.8)' // Gris (Secondary)
-                            ],
-                            borderColor: '#fff',
-                            hoverOffset: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Distribución basada en EP1 (Apro. >= 11)'
-                            },
-                            legend: {
-                                position: 'bottom',
+                    estudiantes.forEach(nota => {
+                        if (nota === null) {
+                            vacios++;
+                        } else if (nota >= notaMinima) {
+                            aprobados++;
+                        } else {
+                            desaprobados++;
+                        }
+                    });
+
+                    const ctx = document.getElementById('aprobadoDonaChart');
+
+                    if (graficoDona) graficoDona.destroy();
+
+                    graficoDona = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Aprobados', 'Desaprobados', 'Sin Nota'],
+                            datasets: [{
+                                data: [aprobados, desaprobados, vacios],
+                                backgroundColor: [
+                                    'rgba(40, 167, 69, 0.8)',
+                                    'rgba(220, 53, 69, 0.8)',
+                                    'rgba(108, 117, 125, 0.8)'
+                                ],
+                                borderColor: '#fff',
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: `Aprobados / Desaprobados en ${campo}`
+                                },
+                                legend: { position: 'bottom' }
                             }
                         }
-                    }
-                });
+                    });
+                }
+
+                // --- EVENTO PARA ACTUALIZAR EL GRÁFICO CUANDO SE CAMBIA LA EVALUACIÓN ---
+                const selectEvaluacion = document.getElementById('selectEvaluacion');
+                if (selectEvaluacion) {
+                    selectEvaluacion.addEventListener('change', function() {
+                        actualizarGraficoDona(this.value);
+                    });
+
+                    // Inicializar gráfico con la primera evaluación seleccionada
+                    actualizarGraficoDona(selectEvaluacion.value);
+                }
+
                 // FIN GRÁFICOS
             {% endif %}
         });

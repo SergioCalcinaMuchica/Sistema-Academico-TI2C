@@ -1,78 +1,88 @@
 {% extends "usuarios/profesor/base_profesor.html" %}
 
 {% block content %}
-    <h4 class="mb-4 fw-bold">Formulario de Reserva de Aulas</h4>
+    <!-- Encabezado Principal Limpio -->
+    <h4 class="mb-4 fw-bold border-bottom pb-2">
+        <i class="bi bi-calendar-plus me-2 text-primary"></i> 
+        <b>Solicitud de Reserva de Espacios </b>
+    </h4>
     
-    <!-- 1. Formulario y Reservas Recientes -->
-    <div class="row mb-5">
+    <!-- 1. Formulario y Reservas Recientes (Minimalista) -->
+    <div class="row mb-6 g-4">
         
-        <!-- Columna 1: Formulario de Solicitud -->
+        <!-- Columna 1: Formulario de Solicitud (Card Clean con shadow-subtle) -->
         <div class="col-md-8">
-            <div class="card shadow-sm border-0">
-                <div class="card-body">
-                    <!-- 
-                      Formulario apunta a la URL actual (name='reservar_aula') 
-                      El 'action' vacío o '#' enviará a la misma URL que renderizó la página.
-                    -->
+            <!-- REEMPLAZADO: de 'shadow-lg' a 'shadow-subtle' -->
+            <div class="card border-0 rounded-xl shadow-subtle">
+                <div class="card-body p-5">
+                    
+                    <h5 class="fw-bold mb-4 text-dark">Detalles de la Reserva</h5>
+
                     <form id="reserva-form" action="{% url 'usuarios:reservar_aula' %}?aula_id={{ aula_actual_id|default:'101' }}" method="POST">
                         {% csrf_token %}
-                        <p class="text-muted">
-                            <i class="bi bi-info-circle-fill me-1"></i> 
-                            Complete los datos manualmente o haga clic en una celda verde de la tabla para rellenar.
+                        
+                        <p class="text-muted small mb-4">
+                            <i class="bi bi-hand-index-thumb me-1"></i> 
+                            Haga clic en una celda <b> verde claro </b> de la tabla de disponibilidad para auto-rellenar los campos de abajo.
                         </p>
                         
-                        <!-- 1. Campo ID del Aula (Visible y Actualizado por el filtro) -->
-                        <div class="mb-3">
-                            <label for="input-aula-id" class="form-label fw-bold">ID del Aula</label>
+                        <!-- 1. Campo ID del Aula (Readonly, destacado) -->
+                        <div class="mb-4">
+                            <label for="input-aula-id" class="form-label fw-semibold text-secondary">Aula Seleccionada</label>
                             <input 
                                 type="text" 
-                                class="form-control" 
+                                class="form-control form-control-lg bg-light border-0 text-dark fw-bold" 
                                 id="input-aula-id" 
                                 name="aula_id" 
                                 value="{{ aula_actual_id|default:'101' }}" 
                                 placeholder="Ej: A-101"
                                 required 
-                                title="Este campo se actualiza al usar el filtro de abajo."
+                                title="Este campo se actualiza automáticamente al usar el filtro o hacer clic en la tabla."
                                 readonly 
+                                style="font-size: 1.1rem;"
                             >
                         </div>
                         
                         <!-- 2. Campos de Fecha y Hora -->
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="input-fecha" class="form-label fw-bold">Fecha Solicitada</label>
-                                <input type="date" class="form-control" id="input-fecha" name="fecha" required>
+                            <div class="col-md-6 mb-4">
+                                <label for="input-fecha" class="form-label fw-semibold text-secondary">Fecha Solicitada</label>
+                                <input type="date" class="form-control border-gray rounded-lg p-3" id="input-fecha" name="fecha" required>
                             </div>
-                            <div class="col-md-3 mb-3">
-                                <label for="input-hora-inicio" class="form-label fw-bold">Hora Inicio</label>
-                                <input type="time" class="form-control" id="input-hora-inicio" name="hora_inicio" required>
+                            <div class="col-md-3 mb-4">
+                                <label for="input-hora-inicio" class="form-label fw-semibold text-secondary">Hora Inicio</label>
+                                <input type="time" class="form-control border-gray rounded-lg p-3" id="input-hora-inicio" name="hora_inicio" required>
                             </div>
-                            <div class="col-md-3 mb-3">
-                                <label for="input-hora-fin" class="form-label fw-bold">Hora Fin</label>
-                                <input type="time" class="form-control" id="input-hora-fin" name="hora_fin" required>
+                            <div class="col-md-3 mb-4">
+                                <label for="input-hora-fin" class="form-label fw-semibold text-secondary">Hora Fin</label>
+                                <input type="time" class="form-control border-gray rounded-lg p-3" id="input-hora-fin" name="hora_fin" required>
                             </div>
                         </div>
                         
-                        <!-- 3. Botón de Envío -->
-                        <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg">Enviar Solicitud de Reserva</button>
+                        <!-- 3. Botón de Envío (Más llamativo) -->
+                        <div class="d-grid mt-4 pt-2">
+                            <button type="submit" class="btn btn-primary btn-lg rounded-xl shadow-lg-primary hover-scale">
+                                <i class="bi bi-send-fill me-2"></i> Confirmar Solicitud de Reserva
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
         
-        <!-- Columna 2: Mis Reservas Recientes (sin cambios) -->
+        <!-- Columna 2: Mis Reservas Recientes (Card Minimalista con shadow-subtle) -->
         <div class="col-md-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-light fw-bold">
-                    Mis Reservas Activas
+            <!-- REEMPLAZADO: de 'shadow-lg' a 'shadow-subtle' -->
+            <div class="card border-0 rounded-xl shadow-subtle h-100">
+                <div class="card-header bg-white border-bottom-0 pt-4 px-4 fw-bold text-dark">
+                    Mis Reservas Activas <span class="badge bg-primary-subtle text-primary ms-1">{{ mis_reservas_recientes|length }}</span>
                 </div>
                 <div class="list-group list-group-flush small">
                     {% for reserva in mis_reservas_recientes %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="list-group-item d-flex justify-content-between align-items-center list-group-item-action py-3">
                             <div>
-                                <span class="fw-bold">Aula{{ reserva.aula.id }}</span> ({{ reserva.fecha_reserva|date:"d/m" }})
+                                <span class="fw-bold text-dark">Aula {{ reserva.aula.id }}</span> 
+                                <span class="badge bg-light text-muted fw-normal">{{ reserva.fecha_reserva|date:"d/m" }}</span>
                                 <br>
                                 <small class="text-muted">{{ reserva.hora_inicio|time:"H:i" }} - {{ reserva.hora_fin|time:"H:i" }}</small>
                             </div>
@@ -80,14 +90,15 @@
                             <form action="{% url 'usuarios:cancelar_reserva' %}" method="POST" onsubmit="return confirm('¿Está seguro que desea cancelar esta reserva?');">
                                 {% csrf_token %}
                                 <input type="hidden" name="reserva_id" value="{{ reserva.id }}">
-                                <button type="submit" class="btn btn-outline-danger btn-sm">
-                                    <i class="bi bi-trash"></i>
+                                <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle p-2" title="Cancelar Reserva" style="width: 32px; height: 32px; line-height: 0;">
+                                    <i class="bi bi-x-lg"></i>
                                 </button>
                             </form>
                         </div>
                     {% empty %}
-                        <div class="list-group-item text-muted">
-                            No tienes reservas puntuales activas.
+                        <div class="list-group-item text-center text-muted py-5 rounded-xl border-0">
+                            <i class="bi bi-box-seam h4 d-block mb-2"></i>
+                            No hay reservas puntuales pendientes.
                         </div>
                     {% endfor %}
                 </div>
@@ -96,19 +107,19 @@
     </div>
 
 
-    <!-- 2. Horario de Disponibilidad del Aula (El contenido que querías añadir) -->
-    <div class="row mt-5">
+    <!-- 2. Horario de Disponibilidad del Aula (Tabla Limpia) -->
+    <div class="row mt-5 pt-3">
         <div class="col-md-12">
             
             <!-- Encabezado de la Tabla y Filtro -->
-            <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
-                <h5 class="fw-bold mb-0">Disponibilidad del Espacio: 
-                    <span class="badge bg-secondary fs-6">{{ aula_actual_id|default:'101' }}</span>
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
+                <h5 class="fw-bold mb-0 text-dark">Horario de Disponibilidad: 
+                    <span class="badge bg-primary rounded-pill fs-6">{{ aula_actual_id|default:'101' }}</span>
                 </h5>
 
                 <div class="d-flex align-items-center">
-                    <label for="aula-select" class="form-label mb-0 me-2 small fw-bold">Filtrar Aula:</label>
-                    <select id="aula-select" onchange="window.location.href='?aula_id=' + this.value" class="form-select form-select-sm" style="width: 200px;">
+                    <label for="aula-select" class="form-label mb-0 me-3 small fw-semibold text-secondary">Filtrar por Espacio:</label>
+                    <select id="aula-select" onchange="window.location.href='?aula_id=' + this.value" class="form-select form-select-sm rounded-lg" style="width: 220px;">
                         {% for aula in aulas_existentes %}
                         <option value="{{ aula.id }}" {% if aula.id == aula_actual_id %}selected{% endif %}>
                             {{ aula.nombre }} ({{ aula.id }})
@@ -122,32 +133,31 @@
 
             <!-- Tabla de Horarios -->
             {% if horario_consolidado %}
-                <div class="table-responsive shadow-sm border rounded">
-                    <table class="table table-bordered table-sm text-center align-middle mb-0" style="min-width: 1200px;">
-                        <thead class="table-dark">
+                <div class="table-responsive border rounded-xl shadow-lg-inner">
+                    <table class="table table-hover table-sm text-center align-middle mb-0 tabla-horario">
+                        <thead class="bg-light-subtle">
                             <tr>
-                                <th style="width: 10%;">Hora</th>
+                                <th style="width: 10%;" class="fw-bold text-uppercase small text-secondary">Hora</th>
                                 {% for dia in dias_a_mostrar %}
-                                    <th>{{ dia }}</th>
+                                    <th class="fw-bold text-uppercase small text-secondary">{{ dia }}</th>
                                 {% endfor %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for fila in horario_consolidado %}
                                 <tr>
-                                    <td class="table-secondary fw-bold small text-nowrap">{{ fila.rango }}</td>
+                                    <td class="table-secondary fw-bold small text-nowrap align-middle">{{ fila.rango }}</td>
                                     
                                     {% for celda in fila.data %}
                                         <!-- Aplicamos clases del backend -->
-                                        <td class="p-0 border celda-base {{ celda.color }} {% if celda.data_reserva %}celda-reservable{% endif %}"
+                                        <td class="p-0 celda-base {{ celda.color }} {% if celda.data_reserva %}celda-reservable{% endif %}"
                                             data-reserva="{{ celda.data_reserva|default_if_none:'' }}"
                                             data-fecha="{{ celda.fecha }}"
                                             data-horainicio="{{ celda.horaInicio }}"
                                             data-horafin="{{ celda.horaFin }}"
                                             title="{{ celda.texto }}"
                                         >
-                                            <div class="p-2 small celda-contenido" style="height: 50px;">
-                                                <!-- Usamos el 'texto' que el backend nos da para la celda -->
+                                            <div class="p-2 small celda-contenido text-truncate" style="height: 50px;">
                                                 {{ celda.texto }}
                                             </div>
                                         </td>
@@ -158,29 +168,33 @@
                     </table>
                 </div>
 
-                <!-- Leyenda de Colores -->
-                <div class="mt-3 p-3 bg-light rounded shadow-sm">
-                    <h6 class="fw-bold mb-2">Leyenda de Disponibilidad:</h6>
-                    <div class="d-flex flex-wrap gap-3 small">
+                <!-- Leyenda de Colores (Diseño Minimalista) -->
+                <div class="mt-4 p-4 bg-light rounded-xl shadow-lg-inner">
+                    <h6 class="fw-bold mb-3 text-dark"><i class="bi bi-info-circle me-1"></i> Leyenda de Disponibilidad:</h6>
+                    <div class="d-flex flex-wrap gap-4 small text-dark">
                         <!-- Creamos una leyenda estática que mapee los colores que viene del backend -->
-                        <span class="badge rounded-pill p-2 bg-success-subtle text-dark border border-success border-opacity-50">
-                            <i class="bi bi-circle-fill me-1"></i> Disponible para Reservar
-                        </span>
-                        <span class="badge rounded-pill p-2 bg-danger text-white">
-                            <i class="bi bi-circle-fill me-1"></i> Aula Ocupada (Fija o Reserva de Otro)
-                        </span>
-                        <span class="badge rounded-pill p-2 bg-warning-soft text-dark">
-                            <i class="bi bi-circle-fill me-1"></i> Profesor Ocupado
-                        </span>
-                        <span class="badge rounded-pill p-2 tw-bg-blue-600 tw-text-white text-white">
-                            <i class="bi bi-circle-fill me-1"></i> Mi Reserva Puntual
-                        </span>
+                        <div class="d-flex align-items-center">
+                            <span class="legend-color legend-available me-2"></span>
+                            Disponible para Reservar (Clic para rellenar)
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="legend-color legend-mine me-2"></span>
+                            Mi Reserva Puntual
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="legend-color legend-unavailable me-2"></span>
+                            Aula Ocupada (Fija o Reserva de Otro)
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="legend-color legend-warning me-2"></span>
+                            Profesor Ocupado
+                        </div>
                     </div>
                 </div>
 
             {% else %}
-                <div class="alert alert-info text-center mt-5">
-                    <i class="bi bi-info-circle-fill me-2"></i>
+                <div class="alert alert-info text-center mt-5 rounded-lg p-5">
+                    <i class="bi bi-lightbulb-fill me-2 h5"></i>
                     No se han encontrado bloques de horario para esta aula.
                 </div>
             {% endif %}
@@ -188,67 +202,161 @@
         </div>
     </div>
     
-    <!-- Modal de Aviso (para rellenar formulario) -->
+    <!-- Modal de Aviso (para rellenar formulario) - Diseño Limpio -->
     <div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title" id="infoModalLabel">Período Seleccionado</h5>
+            <!-- REEMPLAZADO: de 'shadow-lg' a 'shadow-subtle' -->
+            <div class="modal-content rounded-xl shadow-subtle">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h5 class="modal-title fw-bold" id="infoModalLabel"><i class="bi bi-check-circle-fill me-2"></i> Período Seleccionado</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body p-4 text-dark">
                     <p id="modal-message">Se rellenarán los siguientes datos en el formulario:</p>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-primary rounded-lg" data-bs-dismiss="modal">Entendido</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ESTILOS Y SCRIPTS -->
+    <!-- ESTILOS Y SCRIPTS (Actualizados) -->
     <style>
-        /* CSS para manejar clases NO estándar de Bootstrap, manteniendo la coherencia visual */
-        .bg-warning-soft {
-            background-color: #fff3cd !important; /* Color soft similar al warning-subtle */
-            color: #664d03 !important;
-            border: 1px solid #ffc107;
+        /* Variables y Mixins de Diseño */
+        :root {
+            --color-available: #d4edda; /* Success Subtle (light green) */
+            --color-unavailable: #f8d7da; /* Danger Subtle (light red) */
+            --color-warning: #fff3cd; /* Warning Subtle (light yellow) */
+            --color-mine: #cce5ff; /* Info Subtle (light blue for user's own) */
+            --color-available-text: #0f5132;
+            --color-unavailable-text: #842029;
         }
 
-        .tw-bg-blue-600.tw-text-white {
-            background-color: #2563eb !important; /* Azul Bootstrap (o similar al 600) */
-            color: white !important;
+        /* 1. CLASE PERSONALIZADA PARA SOMBRAS SUAVES */
+        .shadow-subtle {
+            /* Una sombra más grande pero con opacidad MUY reducida y alto desenfoque */
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+
+        .shadow-subtle:hover {
+             /* Un toque más visible al pasar el ratón */
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Estilos de Tipografía y Contenedores */
+        .rounded-xl {
+            border-radius: 1.25rem !important; /* Más redondeado */
+        }
+
+        /* La sombra para el botón de envío (manteniendo la viveza) */
+        .shadow-lg-primary:hover {
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3) !important;
+        }
+
+        .shadow-lg-inner {
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .hover-scale:hover {
+            transform: translateY(-2px);
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .border-gray {
+             border-color: #dee2e6 !important;
+        }
+
+        /* ------------------ Estilos de la Tabla ------------------ */
+
+        .tabla-horario th, .tabla-horario td {
+            border-color: #f0f0f0; /* Bordes internos muy sutiles */
         }
         
-        /* Estilos de la tabla */
+        .table-secondary {
+            background-color: #f8f9fa !important; /* Fondo gris muy claro para horas */
+            border-right: 2px solid #e9ecef !important;
+        }
+        
+        /* Celdas Base */
         .celda-base {
             cursor: default;
-            transition: background-color 0.15s ease-in-out;
+            transition: all 0.2s ease-in-out;
             padding: 0 !important;
+            border: 1px solid #e9ecef; /* Borde más fino para cada celda */
+            position: relative;
         }
 
-        .celda-reservable {
-            cursor: pointer;
-            border: 2px solid var(--bs-success) !important; /* Borde verde para destacar disponibilidad */
-        }
-
-        .celda-reservable:hover {
-            box-shadow: 0 0 8px rgba(25, 135, 84, 0.4);
-            opacity: 0.9;
-        }
-        
+        /* Contenido de Celda */
         .celda-contenido {
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 0.7rem;
             line-height: 1.1;
+            padding: 0.5rem;
+        }
+
+        /* Clases de Color (Backend/Django) */
+        
+        /* Disponible (Green) - Más claro y con borde de interacción */
+        .bg-success-subtle {
+            background-color: var(--color-available) !important; 
+            color: var(--color-available-text) !important;
         }
         
-        /* Ajuste de color de texto para fondos claros (bg-success-subtle) */
-        .bg-success-subtle .celda-contenido { 
-            color: #0f5132 !important; /* Texto verde oscuro */
+        /* Ocupado/Otras Reservas (Danger/Red) - Más claro */
+        .bg-danger {
+            background-color: var(--color-unavailable) !important; 
+            color: var(--color-unavailable-text) !important;
+            opacity: 0.85; /* Para que no sea tan intenso */
         }
+        
+        /* Profesor Ocupado (Warning/Yellow) - Suave */
+        .bg-warning-soft {
+            background-color: var(--color-warning) !important;
+            color: #664d03 !important;
+            border-color: #ffc107 !important;
+            opacity: 0.9;
+        }
+
+        /* Mi Reserva Puntual (Custom Blue) - Color Primary Suave */
+        .tw-bg-blue-600.tw-text-white {
+            background-color: var(--color-mine) !important; 
+            color: #0c5460 !important; /* Text dark teal/info */
+            font-weight: 600;
+        }
+        
+        /* Celda Reservable (Solo las 'bg-success-subtle' que tienen data_reserva) */
+        .celda-reservable {
+            cursor: pointer;
+            /* Resalta disponibilidad con un borde sutil, no la celda entera */
+            border: 2px solid var(--bs-success) !important; 
+            position: relative;
+            z-index: 10;
+        }
+
+        .celda-reservable:hover {
+            background-color: #c3e6cb !important; /* Un poco más oscuro en hover */
+            box-shadow: 0 0 10px rgba(25, 135, 84, 0.2);
+            z-index: 10;
+            transform: scale(1.02);
+        }
+
+        /* ------------------ Leyenda ------------------ */
+        .legend-color {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .legend-available { background-color: var(--color-available); border-color: var(--bs-success); }
+        .legend-unavailable { background-color: var(--color-unavailable); }
+        .legend-warning { background-color: var(--color-warning); }
+        .legend-mine { background-color: var(--color-mine); border-color: #0d6efd; }
     </style>
 
     <script>
@@ -258,7 +366,6 @@
             const inputFecha = document.getElementById('input-fecha');
             const inputHoraInicio = document.getElementById('input-hora-inicio');
             const inputHoraFin = document.getElementById('input-hora-fin');
-            // El ID del aula es visible y se rellena desde el backend
             const inputAulaId = document.getElementById('input-aula-id'); 
             
             const modalElement = document.getElementById('infoModal');
@@ -266,9 +373,14 @@
             
             let bootstrapModal;
             try {
-                bootstrapModal = new bootstrap.Modal(modalElement);
+                // Asegurarse de que el modal de Bootstrap esté inicializado
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    bootstrapModal = new bootstrap.Modal(modalElement);
+                } else {
+                     console.error("Bootstrap JS no está disponible para el modal.");
+                }
             } catch(e) {
-                console.error("Bootstrap JS no está disponible para el modal.", e);
+                console.error("Error al inicializar el modal de Bootstrap.", e);
             }
 
             // 1. Llenar el formulario al hacer clic en una celda disponible
@@ -287,18 +399,24 @@
                         inputHoraFin.value = dataHoraFin;
                         
                         // 2. Mostrar mensaje de aviso (Modal)
-                        modalMessage.innerHTML = `Se han rellenado los campos: <br>
-                                                <strong>Fecha:</strong> ${dataFecha} <br>
-                                                <strong>Inicio:</strong> ${dataHoraInicio} <br>
-                                                <strong>Fin:</strong> ${dataHoraFin} <br><br>
-                                                Presione "Enviar Solicitud" para confirmar.`;
+                        modalMessage.innerHTML = `Los campos de reserva se han actualizado con éxito: 
+                                                    <ul class="list-unstyled mt-3 fw-semibold">
+                                                        <li><i class="bi bi-calendar-check text-primary me-2"></i> Fecha: <span class="text-dark">${dataFecha}</span></li>
+                                                        <li><i class="bi bi-clock-fill text-primary me-2"></i> Hora Inicio: <span class="text-dark">${dataHoraInicio}</span></li>
+                                                        <li><i class="bi bi-clock-fill text-primary me-2"></i> Hora Fin: <span class="text-dark">${dataHoraFin}</span></li>
+                                                    </ul>
+                                                    <div class="alert alert-warning small mt-3" role="alert">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> No olvide presionar el botón "Confirmar Solicitud" para enviar la reserva.
+                                                    </div>
+                                                    `;
                         
                         if (bootstrapModal) {
                            bootstrapModal.show();
                         }
                         
                         // 3. Desplazar hacia el formulario
-                        inputFecha.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        // Opcional: solo desplazar si no es visible
+                        inputFecha.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 });
             });
@@ -306,9 +424,8 @@
             // 2. Sincronizar el filtro de aula (Select) con el campo de aula (Input)
             const aulaSelect = document.getElementById('aula-select');
             if (aulaSelect && inputAulaId) {
-                 // Sincroniza el valor del <select> al <input> al cargar la página
-                 // (ya que el input tiene el valor 'aula_actual_id' del backend)
-                 aulaSelect.value = inputAulaId.value;
+                // Sincroniza el valor del <select> al <input> al cargar la página
+                aulaSelect.value = inputAulaId.value;
             }
         });
     </script>

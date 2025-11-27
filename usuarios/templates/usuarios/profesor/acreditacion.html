@@ -1,36 +1,137 @@
 {% extends "usuarios/profesor/base_profesor.html" %}
 
 {% block content %}
-    <h4 class="mb-4">Acreditación y Documentos del Docente</h4>
-    
-    <div class="row">
-        <div class="col-md-6">
-            <h5>Documentos Pendientes</h5>
-            <div class="list-group">
-                <a href="#" class="list-group-item list-group-item-action list-group-item-warning">Subir Fotos de Examanes Calificados</a>
+<h4 class="mb-4">Acreditación</h4>
+
+<div class="row">
+    <div class="col-md-7">
+
+        <!-- DOCUMENTOS PENDIENTES -->
+        <h5 class="mb-3">Documentos Pendientes</h5>
+        <div class="list-group mb-4 shadow-sm">
+            <span class="list-group-item list-group-item-warning">
+                Subir Fotos de Exámenes Calificados
+            </span>
+        </div>
+
+        <!-- SUBIDA DE DOCUMENTOS -->
+        <h5 class="mt-4">Subir Nuevo Documento</h5>
+
+        <form action="" method="POST" enctype="multipart/form-data"
+              class="p-3 border rounded bg-light shadow-sm">
+
+            {% csrf_token %}
+
+            <!-- CURSO -->
+            <div class="mb-3">
+                <label class="form-label">Curso</label>
+                <select class="form-select" name="curso_id" required>
+                    <option value="">Seleccione un curso...</option>
+
+                    {% for grupo in cursos_docente %}
+                        <option value="{{ grupo.curso.id }}">
+                            {{ grupo.curso.nombre }} (Grupo {{ grupo.grupo }})
+                        </option>
+                    {% empty %}
+                        <option value="">No tiene cursos de teoría asignados</option>
+                    {% endfor %}
+                </select>
             </div>
-            
-            <h5 class="mt-4">Subir Nuevo Documento</h5>
-            <form action="#" method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="mb-3">
-                    <label for="tipo_doc" class="form-label">Tipo de Documento</label>
-                    <select class="form-select" id="tipo_doc" required>
-                        <option value="">Seleccione...</option>
-                        <option value="NotaAlta">Nota Alta</option>
-                        <option value="NotaMedia">Nota Media</option>
-                        <option value="NotaBaja">Nota Baja</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="documento" class="form-label">Archivo (PDF o JPG)</label>
-                    <input class="form-control" type="file" id="documento" name="documento" required>
-                </div>
-                <button type="submit" class="btn btn-primary">Subir Documento</button>
-            </form>
+
+            <!-- FASE -->
+            <div class="mb-3">
+                <label class="form-label">Fase</label>
+                <select class="form-select" name="fase" required>
+                    <option value="">Seleccione...</option>
+                    <option value="Fase1">Fase 1</option>
+                    <option value="Fase2">Fase 2</option>
+                    <option value="Fase3">Fase 3</option>
+                </select>
+            </div>
+
+            <!-- TIPO -->
+            <div class="mb-3">
+                <label class="form-label">Tipo de Documento</label>
+                <select class="form-select" name="tipo" required>
+                    <option value="">Seleccione...</option>
+                    <option value="notaAlta">Nota Alta</option>
+                    <option value="notaMedia">Nota Media</option>
+                    <option value="notaBaja">Nota Baja</option>
+                </select>
+            </div>
+
+            <!-- ARCHIVO -->
+            <div class="mb-3">
+                <label class="form-label">Archivo (PDF, JPG, PNG)</label>
+                <input class="form-control"
+                       type="file"
+                       name="documento"
+                       accept=".pdf,.jpg,.jpeg,.png"
+                       required>
+            </div>
+
+            <button type="submit"
+                    class="btn btn-primary w-100">
+                Subir Documento
+            </button>
+        </form>
+
+        <!-- LISTA DE DOCUMENTOS SUBIDOS -->
+        <hr class="my-4">
+
+        <h5 class="mb-3">Documentos Subidos</h5>
+
+        {% for item in documentos %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                {{ item.curso.nombre }} (Grupo {{ item.grupo.grupo }})
+            </div>
+            <div class="card-body">
+
+                <table class="table table-bordered text-center align-middle">
+                    <thead>
+                        <tr>
+                            <th>Fase</th>
+                            <th>Nota Alta</th>
+                            <th>Nota Media</th>
+                            <th>Nota Baja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in item.fases %}
+                        <tr>
+                            <td><strong>{{ f.fase }}</strong></td>
+
+                            {% for t in f.tipos %}
+                            <td>
+                                {% if t.archivo %}
+                                    <div>{{ t.archivo }}</div>
+
+                                    <!-- BOTÓN ELIMINAR -->
+                                    <form method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="curso_id" value="{{ item.curso.id }}">
+                                        <input type="hidden" name="delete_campo" value="{{ t.campo }}">
+                                        <button class="btn btn-sm btn-danger mt-2">Eliminar</button>
+                                    </form>
+
+                                {% else %}
+                                    <span class="text-secondary">Sin archivo</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+            </div>
         </div>
+        {% empty %}
+            <p>No hay documentos registrados.</p>
+        {% endfor %}
+
     </div>
-    
-    <div class="d-flex justify-content-center align-items-center mt-5" style="height:20vh;">
-        </div>
+</div>
+
 {% endblock content %}

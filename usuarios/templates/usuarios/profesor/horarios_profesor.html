@@ -1,21 +1,133 @@
 {% extends "usuarios/profesor/base_profesor.html" %}
 
 {% block content %}
+    <style>
+        /* Estilos personalizados para el horario tipo Calendar con diseño suave */
+        .horario-calendar {
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+        /* Bordes internos muy sutiles */
+        .horario-calendar th, .horario-calendar td {
+            border-color: #f5f5f5 !important; 
+            padding: 0;
+        }
+        /* Cabecera de la tabla */
+        .horario-calendar thead th {
+            background-color: #3f51b5; 
+            color: white;
+            padding: 8px 5px; /* Reducido de 10px a 8px */
+            font-weight: 600;
+            border-bottom: none !important;
+        }
+        /* Columna de la hora */
+        .time-column {
+            background-color: #f8f9fa;
+            font-size: 0.85rem; /* Fuente un poco más pequeña */
+            font-weight: 600;
+            color: #5a5a5a;
+            padding: 6px 5px; /* Reducido de 8px a 6px */
+            width: 10%;
+        }
+        /* Bloque de clase (donde hay curso) */
+        .class-block-container {
+            min-height: 70px; /* Reducido de 80px a 70px */
+            padding: 0;
+            cursor: default;
+            transition: background-color 0.3s;
+        }
+        .class-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Alineación a la izquierda */
+            text-align: left;
+            padding: 5px 8px; /* Padding ajustado */
+            border-left: 4px solid; /* Borde vertical grueso para el color principal */
+            min-height: 70px;
+            height: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+            line-height: 1.2;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Sombra muy sutil */
+        }
+        .class-block:hover {
+            transform: translateY(-1px); 
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+        }
+        .class-block .fw-bold {
+            font-size: 0.9rem; /* Fuente del título del curso más pequeña */
+            color: #333; /* Texto del curso oscuro para contraste */
+            margin-bottom: 2px;
+        }
+        .class-block small {
+            font-size: 0.75rem; /* Fuente de detalles muy pequeña */
+            color: #666; /* Texto de detalles gris */
+        }
+        .class-block .location {
+            display: flex;
+            align-items: center;
+            margin-top: 3px;
+        }
+        /* Estilo para celda libre */
+        .free-cell {
+            color: #ccc;
+            font-size: 0.75rem;
+            height: 70px; 
+            text-transform: uppercase;
+        }
+        /* Estilo para la leyenda */
+        .legend-color-key {
+            border-radius: 4px;
+            font-size: 0.8rem; /* Leyenda un poco más pequeña */
+            padding: 4px 8px;
+            font-weight: 500;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        /* Reglas de color dinámicas: usamos el borde y un fondo opaco (ej. bg-primary-subtle) */
+        .bg-custom-primary {
+            background-color: var(--bs-primary-bg-subtle);
+            border-color: var(--bs-primary) !important;
+        }
+        .bg-custom-success {
+            background-color: var(--bs-success-bg-subtle);
+            border-color: var(--bs-success) !important;
+        }
+        .bg-custom-info {
+            background-color: var(--bs-info-bg-subtle);
+            border-color: var(--bs-info) !important;
+        }
+        .bg-custom-warning {
+            background-color: var(--bs-warning-bg-subtle);
+            border-color: var(--bs-warning) !important;
+        }
+        .bg-custom-danger {
+            background-color: var(--bs-danger-bg-subtle);
+            border-color: var(--bs-danger) !important;
+        }
+        /* Mapeo de colores (tendrás que asegurarte de que tus bloques.color mapeen a estos) */
+        /* Supongamos que tu backend genera 'bg-primary', 'bg-success', etc. */
+        .bg-primary { border-left-color: var(--bs-primary) !important; background-color: var(--bs-primary-bg-subtle) !important; }
+        .bg-success { border-left-color: var(--bs-success) !important; background-color: var(--bs-success-bg-subtle) !important; }
+        .bg-info { border-left-color: var(--bs-info) !important; background-color: var(--bs-info-bg-subtle) !important; }
+        .bg-warning { border-left-color: var(--bs-warning) !important; background-color: var(--bs-warning-bg-subtle) !important; }
+        .bg-danger { border-left-color: var(--bs-danger) !important; background-color: var(--bs-danger-bg-subtle) !important; }
+    </style>
+
     <h4 class="mb-4 fw-bold">📅 Horario de Clase Asignado</h4>
     
     {% if horario_con_conflicto %}
-        <div class="alert alert-danger text-center shadow-sm">
+        <div class="alert alert-danger text-center shadow-sm border-0 rounded-3">
             <i class="bi bi-exclamation-triangle-fill me-2"></i> 
-            <strong>¡Advertencia!</strong> Se ha detectado un **choque de horario** en tu asignación de clases. Consulta la consola del servidor para más detalles.
+            <strong>¡Advertencia de Conflicto!</strong> Se ha detectado un **choque de horario** en tu asignación de clases. Por favor, revisa la consola del servidor o contacta a la administración.
         </div>
     {% endif %}
 
     {% if horario_consolidado %}
         <div class="table-responsive">
-            <table class="table table-bordered text-center align-middle" style="min-width: 800px;">
+            <table class="table table-hover text-center align-top horario-calendar" style="min-width: 900px;">
                 <thead class="table-dark">
                     <tr>
-                        <th style="width: 10%;">Hora</th>
+                        <th class="time-column" style="width: 10%;">Hora</th>
                         {% for dia in dias %}
                             <th>{{ dia }}</th>
                         {% endfor %}
@@ -25,20 +137,28 @@
                     {# Iteramos sobre la lista consolidada que contiene rango y datos de fila #}
                     {% for fila in horario_consolidado %}
                         <tr>
-                            <td class="table-secondary fw-bold">{{ fila.rango }}</td>
+                            <td class="time-column">{{ fila.rango }}</td>
                             
                             {# Iteramos sobre los datos de la fila (los 5 días) #}
                             {% for bloque in fila.data %}
                                 {% if bloque %}
-                                    <td class="{{ bloque.color }} text-white p-2">
-                                        <div class="fw-bold">{{ bloque.nombre }}</div>
-                                        <small>{{ bloque.codigo_grupo }} ({{ bloque.tipo }})</small>
-                                        <br>
-                                        {# Muestra el ID del aula, que ahora es aula_nombre en la vista #}
-                                        <i class="bi bi-geo-alt-fill me-1"></i> <small>Aula {{ bloque.aula_nombre }}</small>
+                                    {# La celda td ahora solo contiene el contenedor para controlar el padding global #}
+                                    <td class="class-block-container p-0"> 
+                                        {# Aplicamos el color de fondo opaco y el borde izquierdo grueso al div interno #}
+                                        {# NOTA: El backend debe asegurarse de que bloque.color sea una clase válida de Bootstrap (ej. 'bg-primary') #}
+                                        <div class="class-block {{ bloque.color }}">
+                                            <div class="fw-bold text-truncate w-100">{{ bloque.nombre }}</div>
+                                            <small class="text-muted">{{ bloque.codigo_grupo }} ({{ bloque.tipo }})</small>
+                                            <div class="location">
+                                                {# El ícono y la ubicación ahora tienen un color sutil #}
+                                                <i class="bi bi-geo-alt-fill me-1 text-muted"></i> <small class="text-muted">Aula {{ bloque.aula_nombre }}</small>
+                                            </div>
+                                        </div>
                                     </td>
                                 {% else %}
-                                    <td class="bg-light-subtle text-muted small p-2">Libre</td>
+                                    <td class="free-cell bg-white text-muted small p-0">
+                                        <div class="d-flex align-items-center justify-content-center h-100">Libre</div>
+                                    </td>
                                 {% endif %}
                             {% endfor %}
                         </tr>
@@ -48,23 +168,23 @@
         </div>
         
         <div class="mt-4">
-            <h5>Leyenda de Cursos</h5>
-            <div class="d-flex flex-wrap gap-2">
+            <h5 class="fw-bold">Leyenda de Cursos</h5>
+            <div class="d-flex flex-wrap gap-3">
                 {# Iteramos sobre la lista de leyenda pre-procesada en la vista (Leyenda Simplificada) #}
                 {% for curso in leyenda_cursos %}
-                    <span class="badge {{ curso.color }} p-2">{{ curso.nombre }}</span>
+                    <span class="legend-color-key {{ curso.color }} text-dark border border-2">{{ curso.nombre }}</span>
                 {% endfor %}
             </div>
         </div>
         
     {% else %}
-        <div class="alert alert-info text-center mt-5">
+        <div class="alert alert-info text-center mt-5 rounded-3 shadow-sm border-0">
             <i class="bi bi-info-circle-fill me-2"></i>
             Actualmente, no tienes bloques de horario asignados para ningún curso.
         </div>
     {% endif %}
     
     <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
-        <p class="text-muted">La tabla muestra los horarios de clase asignados a tu perfil docente.</p>
+        <p class="text-muted small">La tabla muestra los horarios de clase asignados a tu perfil docente.</p>
     </div>
 {% endblock content %}

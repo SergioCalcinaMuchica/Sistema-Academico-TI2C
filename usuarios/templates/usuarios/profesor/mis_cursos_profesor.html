@@ -18,44 +18,162 @@
                     <th scope="col">Asignatura</th>
                     <th scope="col" class="text-center">Grupo</th>
                     <th scope="col" class="text-center">Tipo</th>
-                    <th scope="col" class="text-center">Créditos</th> {# VUELVE A CRÉDITOS (Fácil de sacar) #}
-                    <th scope="col" class="text-center">Acción</th>
+                    <th scope="col" class="text-center">Créditos</th>
+                    <th scope="col" class="text-center">Acciones</th>
                 </tr>
             </thead>
             <tbody>
-                {# Iterar sobre la lista de GrupoCurso asignados #}
                 {% for grupo in carga_academica %}
                 <tr>
-                    <td class="text-center">{{ grupo.curso.id }}</td> 
+                    <td class="text-center">{{ grupo.curso.id }}</td>
                     <td><strong>{{ grupo.curso.nombre }}</strong></td>
                     <td class="text-center">{{ grupo.grupo }}</td>
+
                     <td class="text-center">
                         <span class="badge bg-{% if grupo.tipo == 'Teoría' %}info{% else %}success{% endif %}">
                             {{ grupo.tipo }}
                         </span>
                     </td>
-                    <td class="text-center">{{ grupo.curso.creditos }}</td> {# Muestra el campo Créditos #}
-                    <td class="text-center">
-                        
-                        {# Mostrar la acción de Subir Notas, redirigiendo temporalmente al dashboard. #}
-                        <a href="{% url 'usuarios:dashboard_profesor' %}" class="btn btn-sm btn-warning shadow-sm">
-                            <i class="bi bi-upload me-1"></i> Subir Notas (Temp)
-                        </a>
 
+                    <td class="text-center">{{ grupo.curso.creditos }}</td>
+
+                    <td class="text-center">
+                        <a href="?curso={{ grupo.id }}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-eye"></i> Ver detalles
+                        </a>
                     </td>
                 </tr>
-                {% empty %}
+
                 <tr>
-                    <td colspan="6" class="text-center p-4 text-muted">
-                        El profesor {{ perfil.nombre }} no tiene carga académica asignada para el periodo actual ({{ periodo }}).
+                    <td colspan="6">
+
+                        <!-- ========================== -->
+                        <!-- SOLO SI ES TEORÍA -->
+                        <!-- ========================== -->
+                        {% if curso_seleccionado == grupo.id|stringformat:"s" and grupo.tipo == "Teoría" %}
+
+                        <div class="p-3 border rounded bg-light">
+                            <!-- BOTÓN PARA CERRAR EL BLOQUE -->
+                            <a href="?" class="btn btn-sm btn-outline-danger float-end mb-2">
+                                Cerrar
+                            </a>
+                            <!-- ========================== -->
+                            <!-- SUBIR SILABO -->
+                            <!-- ========================== -->
+                            <h6><strong>Sílabo del Curso</strong></h6>
+
+                            {% if grupo.curso.silabo_url %}
+                                <p class="text-success">Sílabo subido: {{ grupo.curso.silabo_url }}</p>
+                            {% else %}
+                                <form method="POST" enctype="multipart/form-data">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="accion" value="subir_silabo">
+                                    <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+
+                                    <input type="file" name="silabo" accept="application/pdf" required>
+                                    <button class="btn btn-sm btn-primary mt-2">Subir PDF</button>
+                                </form>
+                            {% endif %}
+
+                            <hr>
+
+                            <!-- ========================== -->
+                            <!-- REGISTRO DE TEMAS -->
+                            <!-- ========================== -->
+                            <h6><strong>Registro de Temas</strong></h6>
+
+                            <form method="POST" class="row g-2">
+                                {% csrf_token %}
+                                <input type="hidden" name="accion" value="registrar_tema">
+                                <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+
+                                <div class="col-md-5">
+                                    <input name="nombre" class="form-control" placeholder="Tema" required>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <input type="date" name="fecha" class="form-control" required>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <button class="btn btn-success w-100">Registrar</button>
+                                </div>
+                            </form>
+
+                            <hr>
+
+                            <!-- ========================== -->
+                            <!-- CARGA MASIVA -->
+                            <!-- ========================== -->
+                            <h6><strong>Carga masiva (CSV o XLSX)</strong></h6>
+
+                            <form method="POST" enctype="multipart/form-data" class="row g-2">
+                                {% csrf_token %}
+                                <input type="hidden" name="accion" value="cargar_excel">
+                                <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+
+                                <div class="col-md-6">
+                                    <input type="file" name="archivo" accept=".csv,.xlsx" class="form-control" required>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <button class="btn btn-secondary w-100">Cargar</button>
+                                </div>
+                            </form>
+
+                            <hr>
+
+                            <!-- ========================== -->
+                            <!-- LISTA DE TEMAS -->
+                            <!-- ========================== -->
+                            <h6><strong>Temas Registrados</strong></h6>
+
+                            <ul class="list-group">
+                                {% for tema in grupo.temas %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+
+                                    <span>
+                                        {{ tema.orden }}. {{ tema.nombre }}
+                                        <small class="text-muted">(Fecha: {{ tema.fecha }})</small>
+                                    </span>
+
+                                    <div class="d-flex gap-2">
+
+                                        <!-- Marcar completado -->
+                                        <form method="POST">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="accion" value="marcar_completado">
+                                            <input type="hidden" name="tema_id" value="{{ tema.id }}">
+                                            <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+
+                                            <button class="btn btn-sm {% if tema.completado %}btn-success{% else %}btn-outline-secondary{% endif %}">
+                                                {% if tema.completado %}✓{% else %}Marcar{% endif %}
+                                            </button>
+                                        </form>
+
+                                        <!-- BORRAR -->
+                                        <form method="POST">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="accion" value="borrar_tema">
+                                            <input type="hidden" name="tema_id" value="{{ tema.id }}">
+                                            <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+
+                                            <button class="btn btn-sm btn-danger">✕</button>
+                                        </form>
+
+                                    </div>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-muted">No hay temas registrados.</li>
+                                {% endfor %}
+                            </ul>
+
+                        </div>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
-    
-    <div class="d-flex justify-content-center align-items-center mt-5" style="height:10vh;">
-        <p class="text-muted small">Nota: Todos los enlaces de acción redirigen temporalmente al Dashboard hasta su implementación final.</p>
     </div>
 {% endblock content %}

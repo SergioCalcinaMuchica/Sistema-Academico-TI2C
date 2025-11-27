@@ -2,46 +2,237 @@
 {% load custom_filters %} 
 
 {% block content %}
+    <style>
+        /* Variables de colores sutiles y fondo libre */
+        :root {
+            /* Colores de texto oscuro para fondos claros (subtle) */
+            --bs-primary-text-dark: #002752; 
+            --bs-success-text-dark: #07380f;
+            --bs-info-text-dark: #00334f;
+            --bs-warning-text-dark: #493700;
+            --bs-danger-text-dark: #490000;
+            /* Fondo de celdas libres ligeramente grisáceo */
+            --color-free-cell: #fcfcfc; 
+        }
+
+        /* Estilos personalizados para el horario tipo Calendar con diseño suave y COMPACTO */
+        .horario-calendar {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+            /* Sombra sutil */
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+        
+        /* Bordes internos muy sutiles */
+        .horario-calendar th, .horario-calendar td {
+            border-color: #f5f5f5 !important; 
+            padding: 0;
+            vertical-align: top; /* Aseguramos que el contenido empiece arriba */
+            height: 70px; /* COMPACTO: Altura reducida */
+        }
+        
+        /* Cabecera de la tabla */
+        .horario-calendar thead th {
+            background-color: #3f51b5; 
+            color: white;
+            padding: 8px 5px; 
+            font-weight: 600;
+            border-bottom: none !important;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        
+        /* Columna de la hora (Estilo time-column) */
+        .time-column {
+            background-color: #f8f9fa;
+            font-size: 0.75rem; 
+            font-weight: 600;
+            color: #5a5a5a;
+            padding: 10px 5px !important; 
+            width: 10%;
+            border-right: 2px solid #e0e0e0 !important;
+            vertical-align: middle !important;
+        }
+
+        /* Bloque de clase (donde hay curso) */
+        .class-block-container {
+            min-height: 70px; 
+            padding: 0;
+            cursor: pointer; 
+            transition: background-color 0.3s;
+        }
+        
+        .class-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; 
+            text-align: left;
+            padding: 5px 8px !important; /* Padding interno reducido */
+            border-left: 4px solid; 
+            min-height: 70px;
+            height: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+            line-height: 1.1; /* Línea de texto más compacta */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            color: var(--bs-body-color) !important; 
+        }
+
+        .class-block:hover {
+            transform: translateY(-1px); 
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        
+        /* 1. Nombre del Curso (principal) */
+        .class-block .course-name {
+            font-size: 0.85rem; 
+            font-weight: 600;
+            margin-bottom: 0px; 
+            display: block;
+            line-height: 1.1;
+            white-space: normal; /* PERMITE ENVOLVER para que se vea completo */
+            overflow: hidden; 
+            text-overflow: ellipsis;
+            color: inherit !important; 
+        }
+
+        /* 2. Código de Grupo y Tipo (secundario) */
+        .class-block .code-and-type {
+            font-size: 0.7rem; 
+            font-weight: 500;
+            margin-top: 2px;
+            margin-bottom: 2px;
+            color: #4a4a4a !important; 
+            line-height: 1.1;
+        }
+
+        /* 3. Aula (detalle) */
+        .class-block .location-detail {
+            font-size: 0.65rem; 
+            font-weight: 500;
+            color: #6c757d !important; 
+            display: flex;
+            align-items: center;
+            line-height: 1;
+        }
+        
+        /* Celda libre: cambiamos el fondo blanco puro */
+        td.free-cell {
+            background-color: var(--color-free-cell) !important;
+            border-right: 1px solid #eee !important;
+            height: 70px; 
+        }
+        .free-cell .h-100 {
+            color: #bbb;
+        }
+        
+        /* ---------------------------------------------------- */
+        /* REGLAS DE COLOR DINÁMICAS (Usando colores subtle)    */
+        /* ---------------------------------------------------- */
+        
+        /* Aplicamos el color de fondo SUAVE y el color del borde IZQUIERDO al DIV interno */
+        .bg-primary { 
+            border-left-color: var(--bs-primary) !important; 
+            background-color: var(--bs-primary-bg-subtle) !important;
+            color: var(--bs-primary-text-dark) !important; 
+        }
+        .bg-success { 
+            border-left-color: var(--bs-success) !important; 
+            background-color: var(--bs-success-bg-subtle) !important; 
+            color: var(--bs-success-text-dark) !important; 
+        }
+        .bg-info { 
+            border-left-color: var(--bs-info) !important; 
+            background-color: var(--bs-info-bg-subtle) !important; 
+            color: var(--bs-info-text-dark) !important; 
+        }
+        .bg-warning { 
+            border-left-color: var(--bs-warning) !important; 
+            background-color: var(--bs-warning-bg-subtle) !important; 
+            color: var(--bs-warning-text-dark) !important; 
+        }
+        .bg-danger { 
+            border-left-color: var(--bs-danger) !important; 
+            background-color: var(--bs-danger-bg-subtle) !important; 
+            color: var(--bs-danger-text-dark) !important; 
+        }
+        
+        /* Leyenda */
+        .legend-color-key {
+            border-radius: 6px;
+            font-size: 0.85rem; 
+            padding: 6px 12px;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #333;
+            transition: transform 0.2s;
+        }
+        .legend-color-key:hover {
+            transform: translateY(-1px);
+        }
+
+        /* Ajuste para la cabecera de la tabla */
+        .horario-calendar thead.table-dark th {
+            background-color: #3f51b5; 
+            color: white;
+        }
+
+    </style>
+
     <h4 class="mb-4 text-dark fw-bold">📅 Mi Horario de Clases</h4>
     
-    <div class="card p-4 shadow-sm border-0 bg-white">
+    <div class="card p-4 border-0 bg-white horario-calendar">
         
         <h5 class="card-title fw-bold text-secondary mb-3">Horario Semanal</h5>
         
         <div class="table-responsive">
-            <table class="table table-bordered table-fixed text-center align-middle" style="min-width: 900px;">
+            <!-- Aplicamos la clase horario-calendar y eliminamos table-bordered -->
+            <table class="table table-fixed text-center align-middle mb-0" style="min-width: 900px;">
                 <thead class="table-dark sticky-top">
                     <tr>
-                        <th style="width: 10%;">Hora</th>
+                        <th class="time-column" style="width: 10%;">Hora</th>
                         {% for dia in dias %}
                             <th>{{ dia }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {# Itera sobre las horas generadas dinámicamente: (hora_index, rango_HH:MM - HH:MM) #}
+                    {# Itera sobre las horas generadas dinámicamente #}
                     {% for hora_index, hora_rango in horas|enumerate %}
                         <tr>
-                            {# Columna de la Hora #}
-                            <td class="table-light fw-bold">{{ hora_rango }}</td>
+                            {# Columna de la Hora, ahora con clase time-column #}
+                            <td class="time-column">{{ hora_rango }}</td>
                             
-                            {# Itera sobre cada día: (dia_index, nombre_del_dia) #}
+                            {# Itera sobre cada día #}
                             {% for dia_index, dia_nombre in dias|enumerate %} 
                                 
                                 {# Accede a la celda de la matriz: horario_data[hora_index][dia_index] #}
                                 {% with celda=horario_data|get_item:hora_index|get_item:dia_index %}
                                     
                                     {% if celda %}
-                                        {# Hay clase: Usamos los datos (el color viene en 'celda.color') #}
-                                        <td class="{{ celda.color }} text-white p-2" style="font-size: 0.85rem;">
-                                            <strong class="text-uppercase">{{ celda.codigo_grupo }}</strong><br>
-                                            <span class="d-block text-truncate fw-normal">{{ celda.nombre }}</span>
-                                            <small class="fw-bold">({{ celda.tipo }})</small><br>
-                                            <small class="text-white fst-italic">Aula: {{ celda.aula_id }}</small>
+                                        {# Hay clase: Usamos el diseño de bloque interno #}
+                                        <td class="class-block-container p-0"> 
+                                            <div class="class-block {{ celda.color }}">
+                                                
+                                                <!-- 1. Nombre del curso -->
+                                                <div class="course-name">{{ celda.nombre }}</div>
+                                                
+                                                <!-- 2. Código de grupo y tipo (ej. 2501207-A (TEO)) -->
+                                                <small class="code-and-type">{{ celda.codigo_grupo }} ({{ celda.tipo }})</small>
+                                                
+                                                <!-- 3. Aula: Número -->
+                                                <div class="location-detail">
+                                                    <i class="bi bi-geo-alt-fill me-1"></i> Aula: {{ celda.aula_id }}
+                                                </div>
+                                            </div>
                                         </td>
                                     {% else %}
-                                        {# No hay clase: Celda vacía (puede ser un bloque de receso/tiempo libre consolidado) #}
-                                        <td></td>
+                                        {# No hay clase: Celda vacía con estilo libre #}
+                                        <td class="free-cell text-muted p-0">
+                                            <div class="d-flex align-items-center justify-content-center h-100 small">Libre</div>
+                                        </td>
                                     {% endif %}
                                 
                                 {% endwith %}
@@ -52,13 +243,14 @@
             </table>
         </div>
         
-        <hr>
+        <hr class="mt-5">
         
-        {# --- Leyenda de Cursos (Basada en la variable curso_colores) --- #}
+        {# --- Leyenda de Cursos (Actualizada con el nuevo estilo) --- #}
         <h5 class="card-title fw-bold text-secondary mt-4 mb-3">Leyenda de Cursos</h5>
         <div class="d-flex flex-wrap gap-3">
             {% for curso_id, color in curso_colores.items %}
-                <span class="badge {{ color }} p-2">
+                <!-- Usamos la nueva clase de leyenda -->
+                <span class="legend-color-key {{ color }}">
                     {{ curso_id }}
                 </span>
             {% empty %}

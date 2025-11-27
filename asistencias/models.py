@@ -27,7 +27,7 @@ class RegistroAsistenciaDetalle(models.Model):
     # FK a RegistroAsistencia ON DELETE RESTRICT (Protege el registro)
     registro_asistencia = models.ForeignKey(
         RegistroAsistencia, 
-        on_delete=models.RESTRICT, 
+        on_delete=models.CASCADE, 
         db_column='id_RegistroAsistencia'
     )
     

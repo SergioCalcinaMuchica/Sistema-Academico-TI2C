@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ titulo_reporte }}</title>
+    
+    <style>
+        /* A4 Horizontal (landscape) con márgenes reducidos para maximizar el espacio */
+        @page { 
+            size: A4 landscape; 
+            margin: 0.5cm; /* Reducimos el margen a 0.5cm */
+        } 
+        
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            font-size: 8.5pt; 
+            color: #333;
+        }
+
+        /* --- Estilos de Encabezado --- */
+        h1, h2 { 
+            text-align: center; 
+            margin-top: 5px; 
+            margin-bottom: 3px; 
+            font-size: 14pt;
+        }
+        h2 {
+            font-size: 11pt;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        /* --- Estilos de Metadatos --- */
+        .metadata { 
+            margin-bottom: 10px; 
+            border: 1px solid #ccc; 
+            padding: 8px 10px; 
+            border-radius: 3px; 
+            font-size: 8pt; 
+        }
+        .metadata p { 
+            margin: 2px 0; 
+            display: inline-block;
+            margin-right: 25px;
+        }
+        
+        /* --- Estilos de Tabla Principal --- */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 10px; 
+            /* Se mantiene sin table-layout: fixed para ajuste automático */
+        }
+        
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 2px; /* Padding general reducido */
+            text-align: left; 
+            font-size: 8pt; 
+            height: 15px; 
+        }
+        
+        th { 
+            background-color: #e8e8e8; 
+            text-align: center; 
+            vertical-align: top;
+            padding: 2px; /* Reducido a 2px para dar más espacio horizontal */
+        }
+
+        /* Anchos de las columnas de identificación */
+        td.cui { 
+            width: 15%; 
+            max-width: 15%;
+            font-size: 8pt; 
+            text-align: center;
+        } 
+        td.name { 
+            width: 25%; 
+            max-width: 25%;
+            font-weight: bold; 
+            white-space: normal; 
+        }
+        
+        /* Estilos de las columnas de fecha (Cabecera) */
+        .fecha-col { 
+            /* Importante: Un ancho fijo pequeño, pero seguro para 5 caracteres (DD/MM) */
+            width: 28px; 
+            max-width: 28px;
+            text-align: center; 
+            font-size: 7pt; /* Fuente minúscula */
+            line-height: 1;
+            padding: 1px; /* Padding mínimo para las cabeceras de fecha */
+        }
+
+        /* Estilos de asistencia/falta (Cuerpo) */
+        .asistencia-A, .asistencia-F, .asistencia-V {
+            text-align: center; 
+            font-weight: bold; 
+            /* Establecemos el mismo ancho mínimo en el TD para que coincida con el TH */
+            width: 28px; 
+            max-width: 28px; 
+            padding: 2px 1px; /* Padding mínimo en las celdas de registro */
+        }
+        .asistencia-A { background-color: #e0ffe0; color: #006400; font-size: 9pt; }
+        .asistencia-F { background-color: #ffe0e0; color: #8b0000; font-size: 9pt; }
+        .asistencia-V { background-color: #ffffff; color: #aaa; font-size: 9pt; }
+        
+    </style>
+</head>
+<body>
+    <h1>{{ grupo.curso.nombre }} (Grupo {{ grupo.grupo }})</h1>
+    <h2>Reporte Histórico de Asistencia</h2>
+
+    <div class="metadata">
+        <p><strong>Curso:</strong> {{ grupo.curso.nombre }}</p>
+        <p><strong>Grupo ID:</strong> {{ grupo.grupo }}</p>
+        <p><strong>Generado el:</strong> {{ fecha_generacion }}</p>
+        <p><strong>Sesiones Registradas:</strong> {{ fechas|length }}</p>
+    </div>
+
+    {% if reporte_data %}
+    <table>
+        <thead>
+            <tr>
+                <th class="cui">CUI</th>
+                <th class="name">Alumno</th>
+                {% for fecha in fechas %}
+                    <!-- Muestra solo el día/mes (ej. 01/10) -->
+                    <th class="fecha-col" title="{{ fecha }}">{{ fecha|slice:"0:5" }}</th> 
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for estudiante in reporte_data %}
+            <tr>
+                <td class="cui">{{ estudiante.cui }}</td>
+                <td class="name">{{ estudiante.nombre }}</td>
+                {% for fecha, estado in estudiante.registros.items %}
+                    {% if estado == 'A' %}
+                        <td class="asistencia-A">A</td>
+                    {% elif estado == 'F' %}
+                        <td class="asistencia-F">F</td>
+                    {% else %}
+                        <td class="asistencia-V"></td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p style="text-align: center; color: #888;">No se encontraron datos de asistencia para este grupo.</p>
+    {% endif %}
+</body>
+</html>
