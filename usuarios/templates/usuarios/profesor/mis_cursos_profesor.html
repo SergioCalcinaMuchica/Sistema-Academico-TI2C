@@ -58,19 +58,31 @@
                                 Cerrar
                             </a>
                             <!-- ========================== -->
-                            <!-- SUBIR SILABO -->
+                            <!-- SUBIR / ELIMINAR SILABO -->
                             <!-- ========================== -->
                             <h6><strong>Sílabo del Curso</strong></h6>
 
                             {% if grupo.curso.silabo_url %}
-                                <p class="text-success">Sílabo subido: {{ grupo.curso.silabo_url }}</p>
+                                <div class="alert alert-success d-flex justify-content-between align-items-center p-2 mb-2">
+                                    <p class="mb-0">Sílabo subido: <a href="{{ grupo.curso.silabo_url }}" target="_blank" class="alert-link">Ver Sílabo</a></p>
+                                    
+                                    <!-- Formulario para ELIMINAR Silabo -->
+                                    <form method="POST" class="d-inline-block m-0" onsubmit="return confirm('¿Está seguro de que desea eliminar el Sílabo actual? Esta acción no se puede deshacer.');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion" value="eliminar_silabo">
+                                        <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
+                                        <button type="submit" class="btn btn-sm btn-danger ms-3">
+                                            <i class="bi bi-trash"></i> Eliminar
+                                        </button>
+                                    </form>
+                                </div>
                             {% else %}
                                 <form method="POST" enctype="multipart/form-data">
                                     {% csrf_token %}
                                     <input type="hidden" name="accion" value="subir_silabo">
                                     <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
 
-                                    <input type="file" name="silabo" accept="application/pdf" required>
+                                    <input type="file" name="silabo" accept="application/pdf" required class="form-control-sm">
                                     <button class="btn btn-sm btn-primary mt-2">Subir PDF</button>
                                 </form>
                             {% endif %}
@@ -113,7 +125,7 @@
                                 <input type="hidden" name="grupo_id" value="{{ grupo.id }}">
 
                                 <div class="col-md-6">
-                                    <input type="file" name="archivo" accept=".csv,.xlsx" class="form-control" required>
+                                    <input type="file" name="archivo" accept=".csv, .xlsx" class="form-control" required>
                                 </div>
 
                                 <div class="col-md-2">

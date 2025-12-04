@@ -5,8 +5,9 @@ from django.urls import reverse
 from django.db.models import Count, Prefetch, Q, F, Case, When, Sum, ExpressionWrapper, DecimalField, FloatField, Value, Avg, Max, Min
 from django.db import transaction
 from django.db.models.functions import Coalesce
+from django.db.utils import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
-from .models import Perfil, Estudiante, Profesor
+from .models import Perfil, Estudiante, Profesor, Secretaria, Administrador
 from cursos.models import Curso, BloqueHorario, GrupoTeoria, GrupoLaboratorio, GrupoCurso, TemaCurso
 from matriculas.models import Matricula, MatriculaLaboratorio
 from reservas.models import Aula, Reserva
@@ -21,6 +22,7 @@ import datetime as dt
 import math
 import io
 import openpyxl
+import csv
 
 # Librerías que usamos para exportar
 import pandas as pd
@@ -50,38 +52,39 @@ def login_usuario(request, rol_seleccionado):
         password_ingresada = request.POST.get('password')
         
         try:
-            # 1. Buscar Perfil por email y rol (Doble verificación)
+            # 1. Buscar Perfil por email y rol
             usuario_perfil = Perfil.objects.get(
-                email=email_ingresado, 
-                rol=rol_upper # Crucial: solo autentica si el rol coincide
+                email=email_ingresado,
+                rol=rol_upper
             )
 
-            # 2. Corroborar contraseña (SIN HASHEO)
-            if usuario_perfil.password == password_ingresada:
-                
-                # 3. Autenticación exitosa: INICIAR SESIÓN MANUALMENTE
-                request.session['usuario_id'] = usuario_perfil.id
-                request.session['usuario_rol'] = usuario_perfil.rol
-                request.session['is_authenticated'] = True 
-                
-                # 4. Redirigir al dashboard correspondiente
-                if usuario_perfil.rol == 'ESTUDIANTE':
-                    return redirect('usuarios:dashboard_estudiante')
-                if usuario_perfil.rol == 'PROFESOR':
-                    return redirect('usuarios:dashboard_profesor')
-                if usuario_perfil.rol == 'SECRETARIA':
-                    return redirect('usuarios:dashboard_secretaria')
-                # ... Lógica para otros roles ...
-                
-            else:
+            # 1.1 Verificar si la cuenta está inactiva
+            if usuario_perfil.estadoCuenta is False:
+                messages.error(request, "Esta cuenta está inhabilitada. Contacte a secretaría.")
+                return render(request, 'usuarios/login.html', {'rol': rol_upper})
+
+            # 2. Verificar contraseña
+            if usuario_perfil.password != password_ingresada:
                 messages.error(request, "Contraseña incorrecta.")
-                
+                return render(request, 'usuarios/login.html', {'rol': rol_upper})
+
+            # 3. Si pasa las verificaciones: iniciar sesión manual
+            request.session['usuario_id'] = usuario_perfil.id
+            request.session['usuario_rol'] = usuario_perfil.rol
+            request.session['is_authenticated'] = True
+
+            # 4. Redirigir por rol
+            if usuario_perfil.rol == 'ESTUDIANTE':
+                return redirect('usuarios:dashboard_estudiante')
+            if usuario_perfil.rol == 'PROFESOR':
+                return redirect('usuarios:dashboard_profesor')
+            if usuario_perfil.rol == 'SECRETARIA':
+                return redirect('usuarios:dashboard_secretaria')
+
         except Perfil.DoesNotExist:
             messages.error(request, f"Credenciales inválidas para el rol de {rol_upper}.")
-        
-    contexto = {'rol': rol_upper}
-    return render(request, 'usuarios/login.html', contexto)
-
+    
+    return render(request, 'usuarios/login.html', {'rol': rol_upper})
 
 def logout_usuario(request):
     """Cierra la sesión del usuario limpiando las variables de sesión."""
@@ -106,7 +109,7 @@ def check_student_auth(request):
         estudiante_obj = Estudiante.objects.select_related('perfil').get(perfil__id=usuario_id)
         return estudiante_obj, None
     except Estudiante.DoesNotExist:
-        messages.error(request, "Error: Datos de estudiante no encontrados.")
+        messages.error(request, "Error: Datos de estudiante no encontrados. Cierre de sesión forzado.")
         return None, redirect('usuarios:logout')
 
 def dashboard_estudiante(request):
@@ -468,16 +471,19 @@ def mis_cursos(request):
         matriculas_lab_map[curso_id] = mat_lab
         
     # ----------------------------------------------------------------------
-    # 2. Consulta B: Matrículas de Teoría y Estructuración de Datos
+    # 2. Consulta B: Matrículas de Teoría y Estructuración de Datos (OPTIMIZADA Y CORREGIDA)
     # ----------------------------------------------------------------------
     
     # Obtenemos las matrículas de teoría del estudiante (asumiendo estado=True para activos)
+    # CORRECCIÓN: La relación es GrupoCurso -> GrupoTeoria (accesor: grupoteoria) -> TemaCurso (accesor: temacurso_set)
     matriculas_teoria_activas = Matricula.objects.filter(
         estudiante=estudiante_obj, 
         estado=True
     ).select_related(
         'grupo_curso__curso', 
         'grupo_curso__profesor__perfil'
+    ).prefetch_related(
+        'grupo_curso__grupoteoria__temacurso_set'
     ).order_by(
         'grupo_curso__curso__nombre'
     )
@@ -485,7 +491,7 @@ def mis_cursos(request):
     cursos_info = []
     
     for mat_teoria in matriculas_teoria_activas:
-        grupo_teoria = mat_teoria.grupo_curso
+        grupo_teoria = mat_teoria.grupo_curso # Este es un objeto GrupoCurso
         curso = grupo_teoria.curso
         
         # Intentamos obtener la info del laboratorio usando el mapa
@@ -509,6 +515,17 @@ def mis_cursos(request):
         # Manejo de Profesor de Teoría
         profesor_teoria_nombre = grupo_teoria.profesor.perfil.nombre if grupo_teoria.profesor else 'Pendiente'
         
+        # Acceso CORREGIDO a los temas
+        temas_del_curso = []
+        try:
+            # grupo_teoria (GrupoCurso) tiene el accesor 'grupoteoria' (GrupoTeoria)
+            # y GrupoTeoria tiene el accesor inverso 'temacurso_set' (Temas)
+            temas_del_curso = list(grupo_teoria.grupoteoria.temacurso_set.all())
+        except GrupoTeoria.DoesNotExist:
+            # Esto maneja si el GrupoCurso no está especializado como GrupoTeoria 
+            # (aunque debería estarlo si tiene una Matricula)
+            pass
+        
         cursos_info.append({
             'curso_id': curso.id,
             'nombre_curso': curso.nombre,
@@ -517,6 +534,8 @@ def mis_cursos(request):
             'grupo_lab': grupo_lab_info['grupo'],
             'profesor_lab': grupo_lab_info['profesor'],
             'grupo_lab_id': grupo_lab_info['id'], 
+            'temas': temas_del_curso, 
+            'collapse_id': f'temas-{curso.id}' 
         })
 
     # ----------------------------------------------------------------------
@@ -1067,11 +1086,14 @@ def dashboard_profesor(request):
     # Contar todos los grupos donde el profesor_obj es el profesor asignado
     cursos_asignados_count = GrupoCurso.objects.filter(profesor=profesor_obj).count()
 
-    # --- 2. Aulas Reservadas (stats.reservas_activas_hoy) ---
-    # Contar las reservas de aula hechas por este profesor para la fecha de hoy
-    reservas_activas_hoy = Reserva.objects.filter(
+    days_until_friday = (4 - hoy.weekday() + 7) % 7 
+    fecha_viernes = hoy + dt.timedelta(days=days_until_friday)
+
+    # 2. Contar las reservas de aula hechas por este profesor desde hoy hasta el viernes más cercano
+    # Se usa __range=[fecha_inicio, fecha_fin]
+    reservas_activas_semana = Reserva.objects.filter(
         profesor=profesor_obj,
-        fecha_reserva=hoy
+        fecha_reserva__range=[hoy, fecha_viernes] 
     ).count()
 
     # --- 3. Asistencia (stats.asistencia_resumen_hoy) ---
@@ -1114,7 +1136,7 @@ def dashboard_profesor(request):
         'titulo': 'Inicio - Panel Docente',
         'stats': {
             'cursos_asignados_count': cursos_asignados_count,
-            'reservas_activas_hoy': reservas_activas_hoy,
+            'reservas_activas_semana': reservas_activas_semana,
             'asistencia_resumen_hoy': asistencia_resumen_hoy, # Formato "X/Y"
         }
     }
@@ -1197,19 +1219,49 @@ def mis_cursos_profesor(request):
     cursos_procesados = []
 
     for g in carga_academica:
+        # 1. Procesar g.teoria
+        if g.teoria:
+            try:
+                # Intenta tomar el primer elemento (si es una lista/QuerySet)
+                g.teoria = g.teoria[0]
+            except TypeError:
+                # Si falla con TypeError, es porque ya es el objeto simple. No hacemos nada.
+                pass 
+            except IndexError:
+                # Si la lista está vacía, establece a None.
+                g.teoria = None
+        else:
+            g.teoria = None
+
+
+        # 2. Procesar g.laboratorio
+        if g.laboratorio:
+            try:
+                g.laboratorio = g.laboratorio[0]
+            except TypeError:
+                pass
+            except IndexError:
+                g.laboratorio = None
+        else:
+            g.laboratorio = None
+
         if g.teoria:
             g.tipo = "Teoría"
             g.grupo_teoria = g.teoria
 
+            # Obtener temas ordenados por el campo 'orden'
             g.temas = TemaCurso.objects.filter(
                 grupo_teoria=g.grupo_teoria
             ).order_by("orden")
+            
             # === AUTO-MARCAR TEMAS CON 7+ DÍAS DE ANTIGÜEDAD ===
-            from datetime import date, timedelta
             hoy = date.today()
 
             for tema in g.temas:
+                # Comprobación de que tema.fecha no sea None
                 if tema.fecha and tema.fecha <= hoy - timedelta(days=7) and not tema.completado:
+                    # Se requiere guardar cada tema individualmente si se modifica en el bucle
+                    # Esto garantiza que el cambio se persista inmediatamente.
                     tema.completado = True
                     tema.save()
         elif g.laboratorio:
@@ -1229,83 +1281,219 @@ def mis_cursos_profesor(request):
     if request.method == "POST":
         accion = request.POST.get("accion")
         grupo_id = request.POST.get("grupo_id")
+        
+        # Redirección de fallback en caso de error
+        redirect_url_base = reverse('usuarios:mis_cursos_profesor')
+        redirect_url_specific = f"{redirect_url_base}?curso={grupo_id}" if grupo_id else redirect_url_base
 
-        grupo_obj = GrupoCurso.objects.get(id=grupo_id)
+        try:
+            grupo_obj = GrupoCurso.objects.get(id=grupo_id)
+        except GrupoCurso.DoesNotExist:
+            messages.error(request, "Grupo de curso no encontrado.")
+            return redirect(redirect_url_base)
+
         grupo_teoria = GrupoTeoria.objects.filter(grupo_curso=grupo_obj).first()
 
-        # Si no es teoría → evitar error
-        if not grupo_teoria:
-            messages.error(request, "Este grupo no tiene sección de Teoría.")
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+        # Si no es teoría → evitar error en acciones específicas de teoría
+        if accion in ["registrar_tema", "marcar_completado", "borrar_tema", "cargar_excel"] and not grupo_teoria:
+            messages.error(request, "Esta acción solo está disponible para grupos de Teoría.")
+            return redirect(redirect_url_specific)
 
         # SUBIR SILABO
         if accion == "subir_silabo":
             archivo = request.FILES.get("silabo")
             if archivo and archivo.name.endswith(".pdf"):
-                curso = grupo_obj.curso
-                curso.silabo_url = archivo.name
-                curso.save()
+                # Simulación de subida: Guardamos el nombre del archivo como URL para este ejemplo
+                # En un entorno real, aquí se llamaría a un servicio de almacenamiento (AWS S3, Google Cloud Storage, etc.)
+                try:
+                    curso = grupo_obj.curso
+                    # Usar el nombre del archivo subido como URL temporal
+                    curso.silabo_url = f"/media/silabos/{curso.id}_{grupo_obj.grupo}_{archivo.name}" 
+                    curso.save()
+                    messages.success(request, f"Sílabo '{archivo.name}' subido con éxito.")
+                except Exception as e:
+                    messages.error(request, f"Error al guardar el sílabo en la base de datos: {e}")
+            else:
+                messages.error(request, "Solo se permiten archivos PDF.")
 
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+            return redirect(redirect_url_specific)
+            
+        # ========================================================
+        # NUEVA LÓGICA: ELIMINAR SILABO
+        # ========================================================
+        if accion == "eliminar_silabo":
+            try:
+                curso = grupo_obj.curso
+                # En una aplicación real, aquí también se debería eliminar el archivo del sistema de almacenamiento.
+                if curso.silabo_url:
+                    nombre_archivo_previo = curso.silabo_url.split('/')[-1]
+                    curso.silabo_url = None # Establecer el campo a null/None
+                    curso.save()
+                    messages.success(request, f"Sílabo '{nombre_archivo_previo}' eliminado con éxito.")
+                else:
+                    messages.warning(request, "No hay sílabo cargado para eliminar.")
+            except Exception as e:
+                messages.error(request, f"Error al intentar eliminar el sílabo: {e}")
+
+            return redirect(redirect_url_specific)
 
         # REGISTRO DE TEMA
         if accion == "registrar_tema":
             nombre = request.POST.get("nombre")
             fecha = request.POST.get("fecha")
-
+            
+            # Se asegura que el orden sea secuencial
             orden = TemaCurso.objects.filter(grupo_teoria=grupo_teoria).count() + 1
 
-            TemaCurso.objects.create(
-                nombre=nombre,
-                fecha=fecha,
-                orden=orden,
-                completado=False,
-                grupo_teoria=grupo_teoria
-            )
+            if nombre and fecha:
+                try:
+                    TemaCurso.objects.create(
+                        nombre=nombre,
+                        fecha=fecha,
+                        orden=orden,
+                        completado=False,
+                        grupo_teoria=grupo_teoria
+                    )
+                    messages.success(request, f"Tema '{nombre}' registrado con éxito.")
+                except IntegrityError:
+                     messages.error(request, "Error de integridad al registrar el tema.")
+                except Exception as e:
+                     messages.error(request, f"Error desconocido al registrar el tema: {e}")
+            else:
+                messages.error(request, "Faltan datos (Nombre o Fecha) para registrar el tema.")
 
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+            return redirect(redirect_url_specific)
 
         # MARCAR COMPLETADO
         if accion == "marcar_completado":
             tema_id = request.POST.get("tema_id")
-            tema = TemaCurso.objects.get(id=tema_id)
-            tema.completado = not tema.completado
-            tema.save()
+            try:
+                tema = TemaCurso.objects.get(id=tema_id)
+                # Solo permite marcar/desmarcar si pertenece al grupo de teoría correcto
+                if tema.grupo_teoria == grupo_teoria:
+                    tema.completado = not tema.completado
+                    tema.save()
+                    messages.success(request, f"Tema '{tema.nombre}' actualizado.")
+                else:
+                    messages.error(request, "El tema no pertenece a este grupo de teoría.")
+            except TemaCurso.DoesNotExist:
+                messages.error(request, "Tema no encontrado.")
 
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+            return redirect(redirect_url_specific)
 
         # BORRAR TEMA
         if accion == "borrar_tema":
             tema_id = request.POST.get("tema_id")
-            TemaCurso.objects.filter(id=tema_id).delete()
+            try:
+                # Usamos transaction.atomic para asegurar que el borrado y el reordenamiento sean atómicos
+                with transaction.atomic():
+                    TemaCurso.objects.filter(id=tema_id, grupo_teoria=grupo_teoria).delete() # Se añade filtro por grupo_teoria por seguridad
+                    messages.success(request, "Tema eliminado con éxito.")
 
-            # Reordenar
-            temas = TemaCurso.objects.filter(grupo_teoria=grupo_teoria).order_by("fecha")
-            for i, t in enumerate(temas, start=1):
-                t.orden = i
-                t.save()
+                    # Reordenar: Se corrige el ordenamiento para que sea por el campo 'orden'
+                    temas = TemaCurso.objects.filter(grupo_teoria=grupo_teoria).order_by("orden")
+                    for i, t in enumerate(temas, start=1):
+                        t.orden = i
+                        t.save()
+            except Exception as e:
+                messages.error(request, f"Error al intentar borrar/reordenar el tema: {e}")
 
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+
+            return redirect(redirect_url_specific)
 
         # CARGA MASIVA
         if accion == "cargar_excel":
             archivo = request.FILES.get("archivo")
 
-            if archivo.name.endswith(".csv"):
-                df = pd.read_csv(archivo)
-            else:
-                df = pd.read_excel(archivo)
+            if archivo is None:
+                messages.error(request, "Debe seleccionar un archivo para la carga masiva.")
+                return redirect(redirect_url_specific)
+            
+            try:
+                # 1. Obtener GrupoTeoria (solo si es Teoría)
+                try:
+                    # Asume que GrupoTeoria tiene un FK o OneToOneField a GrupoCurso
+                    grupo_teoria_obj = GrupoTeoria.objects.get(grupo_curso=grupo_obj)
+                except GrupoTeoria.DoesNotExist:
+                    messages.error(request, "Solo puede cargar temas masivamente en grupos de Teoría.")
+                    return redirect(redirect_url_specific)
 
-            for _, row in df.iterrows():
-                TemaCurso.objects.create(
-                    nombre=row["nombre"],
-                    orden=row["orden"],
-                    fecha=row["fecha"],
-                    completado=row.get("completado", False),
-                    grupo_teoria=grupo_teoria
-                )
+                # 2. Leer el archivo (soporta CSV y XLSX)
+                file_extension = archivo.name.split('.')[-1].lower()
+                df = None
+                
+                if file_extension == "csv":
+                    # Usar StringIO para leer el archivo CSV
+                    df = pd.read_csv(io.StringIO(archivo.read().decode('utf-8')), header=None)
+                elif file_extension == "xlsx":
+                    # Usar io.BytesIO para leer el archivo XLSX
+                    df = pd.read_excel(io.BytesIO(archivo.read()), header=None)
+                else:
+                    messages.error(request, "Formato de archivo no soportado. Use .csv o .xlsx.")
+                    return redirect(redirect_url_specific)
+                
+                # 3. Validar columnas
+                if df.shape[1] < 2:
+                    messages.error(request, "El archivo debe tener al menos dos columnas (Nombre del Tema y Fecha).")
+                    return redirect(redirect_url_specific)
+                
+                # 4. Procesar y guardar en una transacción
+                temas_creados = 0
+                errores = []
 
-            return redirect(f"{reverse('usuarios:mis_cursos_profesor')}?curso={grupo_id}")
+                # Obtener el último orden para continuar la numeración
+                ultimo_tema = TemaCurso.objects.filter(
+                    grupo_teoria=grupo_teoria_obj
+                ).order_by('-orden').first()
+                
+                orden_actual = ultimo_tema.orden + 1 if ultimo_tema else 1
+
+                with transaction.atomic():
+                    # df.iterrows() genera (index, Series)
+                    for index, row in df.iterrows():
+                        try:
+                            # Columna 0: Nombre del Tema
+                            nombre_tema = str(row.iloc[0]).strip()
+                            if not nombre_tema: continue # Saltar filas vacías
+                            
+                            # Columna 1: Fecha (se intenta parsear robustamente)
+                            fecha_str = str(row.iloc[1]).strip()
+                            
+                            # Intentar parsear la fecha, 'coerce' convierte fallos a NaT
+                            fecha_dt = pd.to_datetime(fecha_str, errors='coerce')
+                            
+                            if pd.isna(fecha_dt):
+                                raise ValueError(f"Formato de fecha inválido: {fecha_str}")
+                                
+                            fecha_obj = fecha_dt.date()
+                            
+                            # Crear el objeto TemaCurso
+                            TemaCurso.objects.create(
+                                grupo_teoria=grupo_teoria_obj,
+                                nombre=nombre_tema,
+                                fecha=fecha_obj,
+                                orden=orden_actual,
+                                completado=False
+                            )
+                            orden_actual += 1
+                            temas_creados += 1
+                            
+                        except ValueError as ve:
+                            errores.append(f"Fila {index + 1} ('{nombre_tema}'): {ve}")
+                        except Exception as e:
+                            errores.append(f"Fila {index + 1} ('{nombre_tema}'): Error desconocido al procesar la fila. {e}")
+
+                if errores:
+                    # Mostrar errores y el número de temas creados exitosamente
+                    error_msg = f"Carga masiva completada con {temas_creados} temas creados, pero se encontraron {len(errores)} errores en el archivo. "
+                    messages.warning(request, error_msg + "Detalles: " + "; ".join(errores[:3]) + ("..." if len(errores) > 3 else "")) 
+                else:
+                    messages.success(request, f"Carga masiva exitosa. Se registraron {temas_creados} temas.")
+
+            except Exception as e:
+                messages.error(request, f"Error general durante la carga masiva: {e}. Asegúrese de que el archivo no esté vacío y el formato de fecha sea estándar (YYYY-MM-DD).")
+
+            return redirect(redirect_url_specific)
 
     # ---------------------------------------------------------
     # 3. Render
@@ -1627,29 +1815,70 @@ def registro_asistencia(request):
     fecha_q = request.GET.get('fecha')
     hoy = dt.date.today()
     fecha_actual_str = hoy.isoformat()
+    
+    # Mapear el día de la semana de Python (0=Lunes, 1=Martes...) a los choices de Django
+    dia_semana_choices = {
+        0: 'LUNES', 1: 'MARTES', 2: 'MIERCOLES',
+        3: 'JUEVES', 4: 'VIERNES', 5: 'SABADO', 6: 'DOMINGO' # Incluyo fin de semana por si acaso
+    }
+    # Solo buscamos bloques si es un día laborable (L-V)
+    dia_actual_str = dia_semana_choices.get(hoy.weekday(), None)
+
+    # ----------------------------------------------------------------------
+    # LÓGICA DE CÁLCULO DE RESERVAS ACTIVAS HASTA EL VIERNES (Solicitud anterior)
+    # ----------------------------------------------------------------------
+    days_until_friday = (4 - hoy.weekday() + 7) % 7 
+    fecha_viernes = hoy + dt.timedelta(days=days_until_friday)
+
+    reservas_activas_semana = Reserva.objects.filter(
+        profesor=profesor_obj,
+        fecha_reserva__range=[hoy, fecha_viernes] 
+    ).count()
+    # ----------------------------------------------------------------------
 
     # 2. LÓGICA DE CARGA REAL DE GRUPOS ASIGNADOS
+    # **IMPORTANTE:** Usar select_related('curso') para verificar el sílabo eficientemente
     grupos_asignados = GrupoCurso.objects.filter(profesor=profesor_obj).select_related('curso').order_by('curso__nombre', 'grupo')
 
+    # --- LÓGICA PARA RESALTAR GRUPOS CON CLASE HOY Y VERIFICAR SILABO ---
+    grupos_con_clase_hoy_ids = set()
+    
+    if dia_actual_str in ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES']:
+        grupos_con_clase_hoy_ids = set(
+            BloqueHorario.objects.filter(
+                grupo_curso__in=grupos_asignados.values('id'),
+                dia=dia_actual_str
+            ).values_list('grupo_curso_id', flat=True).distinct()
+        )
+
     for g in grupos_asignados:
+        # Determinar el tipo
         if GrupoTeoria.objects.filter(grupo_curso=g).exists():
             g.tipo = "TEORÍA"
         elif GrupoLaboratorio.objects.filter(grupo_curso=g).exists():
             g.tipo = "LAB"
         else:
             g.tipo = "?"
+            
+        # Determinar si tiene clase hoy
+        g.tiene_clase_hoy = g.id in grupos_con_clase_hoy_ids
+        
+        # **NUEVA VERIFICACIÓN DE SÍLABO**
+        # Añade un atributo dinámico al objeto GrupoCurso para usar en el template
+        g.silabo_subido = bool(g.curso.silabo_url)
+        # ---------------------------------------------------
 
     grupo_seleccionado = None
     estudiantes_list = []
     historial_completo = []
 
-    # POST
+    # POST (Las acciones POST (guardar/exportar) asumen que el sílabo ya fue subido si llegaron aquí)
     if request.method == "POST":
         accion = request.POST.get('accion')
 
         # --- AJAX SAVE (Guardado individual) ---
         if accion == "ajax_save":
-            # (Lógica de AJAX SAVE, sin cambios)
+            # ... (Lógica de AJAX SAVE, sin cambios significativos) ...
             if request.headers.get('x-requested-with') != 'XMLHttpRequest':
                 return HttpResponseBadRequest("Only AJAX")
             
@@ -1662,10 +1891,15 @@ def registro_asistencia(request):
                 return JsonResponse({'ok': False, 'msg': 'Faltan datos.'}, status=400)
             
             try:
-                grupo_obj = GrupoCurso.objects.get(id=grupo_id_post, profesor=profesor_obj)
+                grupo_obj = GrupoCurso.objects.select_related('curso').get(id=grupo_id_post, profesor=profesor_obj)
             except GrupoCurso.DoesNotExist:
                 return JsonResponse({'ok': False, 'msg': 'Grupo inválido.'}, status=403)
             
+            # **RESTRICCIÓN DE SÍLABO EN POST/AJAX**
+            if not grupo_obj.curso.silabo_url:
+                return JsonResponse({'ok': False, 'msg': 'RESTRICCIÓN: Sílabo pendiente de subir.'}, status=403)
+
+            # Solo se permite edición por AJAX para la fecha actual
             if fecha_post != hoy.isoformat():
                 return JsonResponse({'ok': False, 'msg': 'Solo edición para la fecha actual permitida por AJAX.'}, status=403)
             
@@ -1674,16 +1908,17 @@ def registro_asistencia(request):
             except ValueError:
                 return JsonResponse({'ok': False, 'msg': 'Formato de fecha inválido.'}, status=400)
             
+            try:
+                from usuarios.models import Estudiante # Importar Estudiante si no está arriba
+                estudiante_obj = Estudiante.objects.get(perfil__id=estudiante_cui)
+            except Estudiante.DoesNotExist:
+                return JsonResponse({'ok': False, 'msg': 'Estudiante no encontrado.'}, status=404)
+            
             registro_principal, _ = RegistroAsistencia.objects.get_or_create(
                 grupo_curso=grupo_obj,
                 fechaClase=fecha_obj,
                 defaults={'ipProfesor': get_client_ip(request), 'horaInicioVentana': timezone.now().time()}
             )
-            
-            try:
-                estudiante_obj = Estudiante.objects.get(perfil__id=estudiante_cui)
-            except Estudiante.DoesNotExist:
-                return JsonResponse({'ok': False, 'msg': 'Estudiante no encontrado.'}, status=404)
             
             estado_model = 'PRESENTE' if estado_simple == 'A' else 'FALTA'
             
@@ -1698,7 +1933,6 @@ def registro_asistencia(request):
 
         # --- SAVE ALL (Guardado masivo) ---
         elif accion == "save_all":
-            # (Lógica de SAVE ALL, sin cambios)
             grupo_id_post = request.POST.get('grupo_id')
             fecha_post = request.POST.get('fecha_sesion')
 
@@ -1707,16 +1941,37 @@ def registro_asistencia(request):
                 return redirect('usuarios:registro_asistencia')
 
             try:
-                grupo_obj = GrupoCurso.objects.get(id=grupo_id_post, profesor=profesor_obj)
+                # Obtener el grupo con el curso relacionado para la verificación del sílabo
+                grupo_obj = GrupoCurso.objects.select_related('curso').get(id=grupo_id_post, profesor=profesor_obj)
             except GrupoCurso.DoesNotExist:
                 messages.error(request, "Grupo inválido o no asignado a usted.")
                 return redirect('usuarios:registro_asistencia')
+            
+            # **RESTRICCIÓN DE SÍLABO EN POST/SAVE_ALL**
+            if not grupo_obj.curso.silabo_url:
+                messages.error(request, f"¡RESTRICCIÓN! Debe subir el sílabo para el curso {grupo_obj.curso.nombre} antes de poder guardar la asistencia.")
+                return redirect(f"{reverse('usuarios:registro_asistencia')}?grupo={grupo_id_post}&fecha={fecha_post}")
+
 
             try:
                 fecha_obj = dt.date.fromisoformat(fecha_post)
             except ValueError:
                 messages.error(request, "Formato de fecha inválido.")
                 return redirect('usuarios:registro_asistencia')
+            
+            grupo_lab = GrupoLaboratorio.objects.filter(grupo_curso=grupo_obj).first()
+            
+            # ... (Resto de la lógica de guardado masivo, sin cambios) ...
+            if grupo_lab:
+                # Es Laboratorio, usamos MatriculaLaboratorio
+                matriculas_query = MatriculaLaboratorio.objects.filter(
+                    laboratorio=grupo_lab
+                ).select_related('estudiante__perfil')
+            else:
+                # Es Teoría/General, usamos Matricula
+                matriculas_query = Matricula.objects.filter(
+                    grupo_curso=grupo_obj
+                ).select_related('estudiante__perfil')
 
             # 1. Obtener o crear el registro principal
             registro_principal, created = RegistroAsistencia.objects.get_or_create(
@@ -1726,7 +1981,7 @@ def registro_asistencia(request):
             )
 
             # 2. Obtener la lista de estudiantes matriculados
-            matriculas = Matricula.objects.filter(grupo_curso=grupo_obj).select_related('estudiante__perfil')
+            matriculas = matriculas_query
             updated = 0
 
             with transaction.atomic():
@@ -1764,18 +2019,42 @@ def registro_asistencia(request):
                 return redirect('usuarios:registro_asistencia')
 
             try:
-                grupo_obj = GrupoCurso.objects.get(id=grupo_id_export, profesor=profesor_obj)
+                grupo_obj = GrupoCurso.objects.select_related('curso').get(id=grupo_id_export, profesor=profesor_obj)
             except GrupoCurso.DoesNotExist:
                 messages.error(request, "Grupo inválido o no asignado a usted.")
                 return redirect('usuarios:registro_asistencia')
+            
+            # **RESTRICCIÓN DE SÍLABO EN POST/EXPORT**
+            if not grupo_obj.curso.silabo_url:
+                messages.error(request, f"¡RESTRICCIÓN! Debe subir el sílabo para el curso {grupo_obj.curso.nombre} antes de poder exportar el registro.")
+                return redirect(f"{reverse('usuarios:registro_asistencia')}?grupo={grupo_id_export}")
 
             # 1. Obtener los datos necesarios:
+            # (Resto de la lógica de exportación, sin cambios significativos)
+            
+            # Determinar si es un grupo de Laboratorio
+            grupo_lab_export = GrupoLaboratorio.objects.filter(grupo_curso=grupo_obj).first()
+
+            if grupo_lab_export:
+                matriculas_query = MatriculaLaboratorio.objects.filter(
+                    laboratorio=grupo_lab_export
+                )
+            else:
+                matriculas_query = Matricula.objects.filter(
+                    grupo_curso=grupo_obj
+                )
+            
             asistencias_sesiones = RegistroAsistencia.objects.filter(grupo_curso=grupo_obj).order_by('fechaClase')
             fechas_sesiones = [a.fechaClase for a in asistencias_sesiones]
             fechas_str = [f.strftime('%Y-%m-%d') for f in fechas_sesiones]
 
-            matriculas = Matricula.objects.filter(grupo_curso=grupo_obj).select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')
-            estudiantes = [{'cui': m.estudiante.perfil.id, 'nombre': m.estudiante.perfil.nombre} for m in matriculas]
+            # Obtener estudiantes de la matrícula y su perfil
+            if grupo_lab_export:
+                estudiantes = [{'cui': m.estudiante.perfil.id, 'nombre': m.estudiante.perfil.nombre} 
+                               for m in matriculas_query.select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')]
+            else:
+                estudiantes = [{'cui': m.estudiante.perfil.id, 'nombre': m.estudiante.perfil.nombre} 
+                               for m in matriculas_query.select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')]
 
             detalles = RegistroAsistenciaDetalle.objects.filter(
                 registro_asistencia__in=asistencias_sesiones
@@ -1851,25 +2130,21 @@ def registro_asistencia(request):
                 # 2. Convertir el HTML a PDF usando xhtml2pdf (pisa)
                 try:
                     pisa_status = pisa.CreatePDF(
-                        html_content,           # El contenido HTML/CSS a convertir
-                        dest=pdf_file_buffer    # Donde escribir el PDF (el buffer)
-                        # xhtml2pdf puede resolver rutas estáticas, pero asegúrese de usar rutas absolutas
-                        # dentro de su template HTML para los recursos estáticos si es necesario.
+                        html_content, # El contenido HTML/CSS a convertir
+                        dest=pdf_file_buffer # Donde escribir el PDF (el buffer)
                     )
                 except Exception as e:
                     error_msg = f"Error al generar PDF con xhtml2pdf: {e}. Verifique que el formato HTML/CSS sea compatible."
                     messages.error(request, error_msg)
                     return redirect(f"{reverse('usuarios:registro_asistencia')}?grupo={grupo_id_export}")
 
-                # Si hubo errores en la generación (ej. CSS mal formado)
                 if pisa_status.err:
                     error_msg = "Error interno de xhtml2pdf al generar el PDF. Revise el formato del template HTML."
                     messages.error(request, error_msg)
                     return redirect(f"{reverse('usuarios:registro_asistencia')}?grupo={grupo_id_export}")
 
-                # Obtenemos el valor binario del buffer
                 pdf_file = pdf_file_buffer.getvalue()
-                pdf_file_buffer.close() # Liberar el buffer
+                pdf_file_buffer.close()
                 
                 # 3. Crear la respuesta HTTP para el PDF
                 response = HttpResponse(pdf_file, content_type='application/pdf')
@@ -1881,61 +2156,96 @@ def registro_asistencia(request):
     # GET (Lógica de carga inicial y filtro)
     if grupo_id:
         try:
-            grupo_seleccionado = GrupoCurso.objects.get(id=grupo_id, profesor=profesor_obj)
-        except GrupoCurso.DoesNotExist:
+            # Reutilizar el grupo ya procesado de grupos_asignados
+            # Se convierte a str el id del grupo.
+            grupo_seleccionado = next(g for g in grupos_asignados if str(g.id) == grupo_id)
+        except StopIteration:
             messages.error(request, "Grupo no encontrado o no asignado a usted.")
             grupo_seleccionado = None
 
     if grupo_seleccionado:
-        # Historial de Asistencias
-        historial_completo = RegistroAsistencia.objects.filter(grupo_curso=grupo_seleccionado).annotate(
-            presentes=Count('registroasistenciadetalle', filter=Q(registroasistenciadetalle__estado='PRESENTE')),
-            faltas=Count('registroasistenciadetalle', filter=Q(registroasistenciadetalle__estado='FALTA'))
-        ).order_by('-fechaClase')
-
-        # Obtener todos los estudiantes matriculados
-        matriculas = Matricula.objects.filter(grupo_curso=grupo_seleccionado).select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')
-
-        registro = None
-        detalles_map = {}
-        
-        if fecha_q:
-            try:
-                fecha_obj = dt.date.fromisoformat(fecha_q)
-            except ValueError:
-                fecha_obj = None
-
-            if fecha_obj:
-                registro = RegistroAsistencia.objects.prefetch_related(
-                    Prefetch('registroasistenciadetalle_set', queryset=RegistroAsistenciaDetalle.objects.select_related('estudiante__perfil'))
-                ).filter(grupo_curso=grupo_seleccionado, fechaClase=fecha_obj).first()
-                
-                if registro:
-                    for d in registro.registroasistenciadetalle_set.all():
-                        detalles_map[d.estudiante.perfil.id] = d.estado
-
-            
-            default_estado_contexto = '' 
-            if not registro and fecha_q == fecha_actual_str:
-                default_estado_contexto = 'A'
-            
-            for m in matriculas:
-                cui = m.estudiante.perfil.id
-                
-                estado_db = detalles_map.get(cui) 
-                
-                if estado_db:
-                    estado_contexto = 'A' if estado_db == 'PRESENTE' else 'F'
-                else:
-                    estado_contexto = default_estado_contexto
-
-                estudiantes_list.append({
-                    'cui': cui,
-                    'nombre': m.estudiante.perfil.nombre,
-                    'estado': estado_contexto
-                })
+        # **RESTRICCIÓN DE SÍLABO EN GET**
+        if not grupo_seleccionado.silabo_subido:
+            # Si el sílabo falta, mostramos un error de Django y evitamos cargar la lista de estudiantes/historial.
+            messages.error(request, f"¡RESTRICCIÓN! Debe subir el sílabo para el curso {grupo_seleccionado.curso.nombre} antes de poder tomar asistencia. Vaya a la sección de Acreditación.")
+            # Limpiamos variables para que no se muestre el detalle de asistencia
+            estudiantes_list = [] 
+            historial_completo = []
+            # Mantener grupo_seleccionado para el contexto del encabezado
         else:
-            pass
+            # Si el sílabo está subido, procedemos con la carga de datos de asistencia
+            # Historial de Asistencias y Matriculas
+            grupo_lab = GrupoLaboratorio.objects.filter(grupo_curso=grupo_seleccionado).first()
+
+            if grupo_lab:
+                # Es un grupo de Laboratorio, usamos MatriculaLaboratorio
+                matriculas = MatriculaLaboratorio.objects.filter(
+                    laboratorio=grupo_lab
+                ).select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')
+            else:
+                # Es un grupo de Teoría (o general), usamos Matricula
+                matriculas = Matricula.objects.filter(
+                    grupo_curso=grupo_seleccionado
+                ).select_related('estudiante__perfil').order_by('estudiante__perfil__nombre')
+                
+            # Historial de Asistencias
+            historial_completo = RegistroAsistencia.objects.filter(grupo_curso=grupo_seleccionado).annotate(
+                presentes=Count('registroasistenciadetalle', filter=Q(registroasistenciadetalle__estado='PRESENTE')),
+                faltas=Count('registroasistenciadetalle', filter=Q(registroasistenciadetalle__estado='FALTA'))
+            ).order_by('-fechaClase')
+
+            registro = None
+            detalles_map = {}
+            
+            if fecha_q:
+                try:
+                    fecha_obj = dt.date.fromisoformat(fecha_q)
+                except ValueError:
+                    fecha_obj = None
+
+                if fecha_obj:
+                    registro = RegistroAsistencia.objects.prefetch_related(
+                        Prefetch('registroasistenciadetalle_set', queryset=RegistroAsistenciaDetalle.objects.select_related('estudiante__perfil'))
+                    ).filter(grupo_curso=grupo_seleccionado, fechaClase=fecha_obj).first()
+                    
+                    if registro:
+                        for d in registro.registroasistenciadetalle_set.all():
+                            detalles_map[d.estudiante.perfil.id] = d.estado
+
+                
+                default_estado_contexto = '' 
+                # Si no hay registro Y estamos mirando la fecha de hoy, se sugiere 'PRESENTE' por defecto
+                if not registro and fecha_q == fecha_actual_str:
+                    default_estado_contexto = 'A'
+                
+                for m in matriculas:
+                    # Determinar el objeto estudiante. Varía si es Matricula o MatriculaLaboratorio
+                    from usuarios.models import Estudiante # Importar Estudiante si no está arriba
+                    estudiante_obj = m.estudiante 
+                    cui = estudiante_obj.perfil.id
+                    
+                    estado_db = detalles_map.get(cui) 
+                    
+                    if estado_db:
+                        estado_contexto = 'A' if estado_db == 'PRESENTE' else 'F'
+                    else:
+                        estado_contexto = default_estado_contexto
+
+                    estudiantes_list.append({
+                        'cui': cui,
+                        'nombre': estudiante_obj.perfil.nombre,
+                        'estado': estado_contexto
+                    })
+            else:
+                for m in matriculas:
+                    from usuarios.models import Estudiante # Importar Estudiante si no está arriba
+                    # Determinar el objeto estudiante. Varía si es Matricula o MatriculaLaboratorio
+                    estudiante_obj = m.estudiante
+                    estudiantes_list.append({
+                        'cui': estudiante_obj.perfil.id,
+                        'nombre': estudiante_obj.perfil.nombre,
+                        'estado': '' 
+                    })
 
     # 'editable' es True solo si se seleccionó la fecha de hoy
     editable = (fecha_q == fecha_actual_str) if fecha_q else False
@@ -1950,6 +2260,8 @@ def registro_asistencia(request):
         'editable': editable,
         'estudiantes_matriculados': estudiantes_list,
         'historial_completo': historial_completo,
+        # Nueva variable que refleja la cuenta de reservas de la semana (hasta el viernes)
+        'reservas_activas_semana': reservas_activas_semana, 
     }
 
     return render(request, 'usuarios/profesor/registro_asistencia.html', contexto)
@@ -2508,7 +2820,7 @@ def subida_notas(request):
     return render(request, 'usuarios/profesor/subida_notas.html', contexto)
 
 # ----------------------------------------------------------------------
-# 2. VISTAS DE LA SECRETARIA
+# 3. VISTAS DE LA SECRETARIA
 # ----------------------------------------------------------------------
 def check_secretaria_auth(request):
     """Función de ayuda para verificar la sesión y el rol de Secretaria."""
@@ -2518,11 +2830,10 @@ def check_secretaria_auth(request):
     
     usuario_id = request.session['usuario_id']
     try:
-        # Aquí solo necesitamos el Perfil, ya que la secretaria no tiene un modelo propio
-        perfil_obj = Perfil.objects.get(id=usuario_id)
-        return perfil_obj, None
-    except Perfil.DoesNotExist:
-        messages.error(request, "Error: Datos de perfil no encontrados. Cierre de sesión forzado.")
+        secretaria_obj = Secretaria.objects.select_related('perfil').get(perfil_id=usuario_id)
+        return secretaria_obj, None
+    except Secretaria.DoesNotExist:
+        messages.error(request, "Error: Datos de secretaria no encontrados.")
         return None, redirect('usuarios:logout')
 
 def dashboard_secretaria(request):
@@ -2583,29 +2894,635 @@ def gestion_laboratorios(request):
     return render(request, 'usuarios/secretaria/gestion_laboratorios.html', contexto)
 
 def registro_estudiantes(request):
-    perfil_obj, response = check_secretaria_auth(request)
-    if response: return response
+    # ===========================
+    #   SUBIR CSV
+    # ===========================
+    if request.method == "POST" and "subir_csv" in request.POST:
+        try:
+            file = request.FILES.get("csv_estudiantes")
 
-    # Recupera todos los estudiantes (datos dinámicos)
-    estudiantes = Estudiante.objects.select_related('perfil').all().order_by('perfil__nombre')
+            if not file:
+                messages.error(request, "Debe seleccionar un archivo CSV.")
+                return redirect("usuarios:registro_estudiantes")
+
+            # Convertimos a texto UTF-8
+            decoded = file.read().decode("utf-8")
+            reader = csv.reader(decoded.splitlines())
+
+            # Formato esperado (sin encabezados):
+            # cui, nombre, email, password
+            for row in reader:
+                if len(row) < 4:
+                    continue
+
+                cui = row[0].strip()
+                nombre = row[1].strip()
+                email = row[2].strip() if row[2].strip() else None
+                password = row[3].strip()
+
+                if not (cui and nombre and password):
+                    continue  # Campos obligatorios
+
+                # Crear o actualizar Perfil
+                perfil, created = Perfil.objects.get_or_create(
+                    id=cui,
+                    defaults={
+                        "nombre": nombre,
+                        "email": email,
+                        "password": password,   # SIN HASH según tu modelo
+                        "rol": "ESTUDIANTE",
+                        "estadoCuenta": True
+                    }
+                )
+
+                # Si el perfil ya existe, actualizar nombre/email/password si cambian
+                if not created:
+                    perfil.nombre = nombre
+                    perfil.email = email
+                    perfil.password = password
+                    perfil.rol = "ESTUDIANTE"
+                    perfil.estadoCuenta = True
+                    perfil.save()
+
+                # Crear estudiante si no existe
+                Estudiante.objects.get_or_create(perfil=perfil)
+
+            messages.success(request, "CSV procesado correctamente.")
+
+        except Exception as e:
+            messages.error(request, f"Error procesando CSV: {str(e)}")
+
+        return redirect("usuarios:registro_estudiantes")
+
+    # ===========================
+    #   CREAR ESTUDIANTE MANUAL
+    # ===========================
+    if request.method == "POST" and "crear_estudiante" in request.POST:
+        cui = request.POST.get("cui")
+        nombre = request.POST.get("nombre")
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+
+        # Validación SOLO de los campos reales
+        if not (cui and nombre and password):
+            messages.error(request, "CUI, Nombre y Contraseña son obligatorios.")
+            return redirect("usuarios:registro_estudiantes")
+
+        # Crear Perfil
+        perfil = Perfil.objects.create(
+            id=cui,
+            nombre=nombre,
+            email=email if email else None,
+            password=password,
+            rol="ESTUDIANTE",
+            estadoCuenta=True
+        )
+
+        # Crear Estudiante
+        Estudiante.objects.create(perfil=perfil)
+
+        messages.success(request, "Estudiante creado correctamente.")
+        return redirect("usuarios:registro_estudiantes")
+
+    # ===========================
+    #   EDITAR ESTUDIANTE
+    # ===========================
+    if request.method == "POST" and "editar_estudiante" in request.POST:
+        est_id = request.POST.get("estudiante_id")
+        nombre = request.POST.get("nombre")
+        email = request.POST.get("email")
+        estado = request.POST.get("estadoCuenta")
+        grupo_id = request.POST.get("grupo_curso_id")
+
+        perfil = Perfil.objects.get(id=est_id)
+
+        # Actualizar datos del perfil
+        perfil.nombre = nombre
+        perfil.email = email if email else None
+        perfil.estadoCuenta = (estado == "True")
+        perfil.save()
+
+        # Asignar curso si corresponde
+        if grupo_id:
+            estudiante = Estudiante.objects.get(perfil_id=est_id)
+            grupo = GrupoCurso.objects.get(id=grupo_id)
+
+            Matricula.objects.get_or_create(
+                estudiante=estudiante,
+                grupo_curso=grupo,
+                defaults={"estado": True}
+            )
+
+        messages.success(request, "Estudiante actualizado.")
+        return redirect("usuarios:registro_estudiantes")
     
-    contexto = {
-        'perfil': perfil_obj, 
-        'titulo': 'Registro de Estudiantes',
-        'estudiantes': estudiantes
+    # =============================
+    #   ELIMINAR ESTUDIANTE
+    # =============================
+    if request.method == "POST" and "eliminar_estudiante" in request.POST:
+        estudiante_id = request.POST.get("estudiante_id")
+
+        try:
+            perfil = Perfil.objects.get(id=estudiante_id)
+
+            # Al eliminar el perfil, se elimina automáticamente el Estudiante
+            # por el OnDelete.CASCADE
+            perfil.delete()
+
+            messages.success(request, "La cuenta del estudiante fue eliminada correctamente.")
+        except Perfil.DoesNotExist:
+            messages.error(request, "El estudiante no existe.")
+
+        return redirect("usuarios:registro_estudiantes")
+
+    # ===========================
+    #     MATRICULAR ESTUDIANTE
+    # ===========================
+    if request.method == "POST" and "asignar_curso" in request.POST:
+
+        estudiante_id = request.POST.get("estudiante_id")
+        grupo_curso_id = request.POST.get("grupo_curso_id")
+
+        try:
+            estudiante = Estudiante.objects.get(pk=estudiante_id)
+            grupo_curso = GrupoCurso.objects.get(pk=grupo_curso_id)
+
+            # Crear la matrícula
+            Matricula.objects.create(
+                estudiante=estudiante,
+                grupo_curso=grupo_curso,
+                estado=True  # Activo por defecto
+            )
+
+            messages.success(request, "Curso asignado correctamente.")
+
+        except Estudiante.DoesNotExist:
+            messages.error(request, "El estudiante no existe.")
+
+        except GrupoCurso.DoesNotExist:
+            messages.error(request, "El grupo del curso no existe.")
+
+        except:
+            messages.error(request, "Este estudiante ya está matriculado en ese grupo.")
+
+        return redirect("usuarios:registro_estudiantes")
+
+    # Activar / Desactivar cuenta
+    if "toggle_estado" in request.POST:
+        perfil = Perfil.objects.get(id=request.POST["estudiante_id"])
+        perfil.estadoCuenta = not perfil.estadoCuenta
+        perfil.save()
+        messages.success(request, "Estado actualizado.")
+        return redirect("usuarios:registro_estudiantes")
+
+    # ===========================
+    #   LISTAR ESTUDIANTES
+    # ===========================
+    estudiantes = Estudiante.objects.select_related("perfil").all()
+    grupos = GrupoCurso.objects.filter(grupoteoria__isnull=False).select_related('curso', 'profesor__perfil').all().order_by("curso__nombre")
+
+    context = {
+        "estudiantes": estudiantes,
+        "grupos": grupos,
     }
-    return render(request, 'usuarios/secretaria/registro_estudiantes.html', contexto)
+    return render(request, "usuarios/secretaria/registro_estudiantes.html", context)
+
+
+def detalle_estudiante(request):
+    perfil_obj, response = check_secretaria_auth(request)
+    if response:
+        return response
+
+    cui = request.GET.get('cui') or (
+        request.resolver_match.kwargs.get('cui')
+        if request.resolver_match else None
+    )
+    if not cui:
+        messages.error(request, "No se indicó CUI del estudiante.")
+        return redirect(reverse('usuarios:registro_estudiantes'))
+
+    # Obtener estudiante
+    perfil_estudiante = get_object_or_404(Perfil, pk=cui)
+    estudiante = get_object_or_404(Estudiante, perfil=perfil_estudiante)
+
+    # Matriculas
+    matriculas_qs = Matricula.objects.filter(
+        estudiante=estudiante
+    ).select_related(
+        'grupo_curso__curso',
+        'grupo_curso__profesor__perfil'
+    ).order_by('grupo_curso__curso__nombre')
+
+    # Laboratorios inscritos
+    labs_qs = (
+        MatriculaLaboratorio.objects.filter(estudiante=estudiante)
+        .select_related(
+            "laboratorio__grupo_curso__curso",
+            "laboratorio__grupo_curso__profesor__perfil"
+        )
+    )
+
+    laboratorios = []
+    for mlab in labs_qs:
+        glab = mlab.laboratorio          # GrupoLaboratorio
+        gcurso = glab.grupo_curso        # GrupoCurso asociado
+
+        laboratorios.append({
+            "id": glab.pk,
+            "curso": gcurso.curso.nombre,
+            "curso_id": gcurso.curso.id,
+            "profesor": gcurso.profesor.perfil.nombre if gcurso.profesor else "-",
+            "grupo": gcurso.grupo,
+        })
+
+    matriculas = []
+    grupo_ids = []
+
+    for m in matriculas_qs:
+        matriculas.append({
+            'id': m.id,
+            'grupo': m.grupo_curso,
+            'estado': m.estado,
+        })
+        grupo_ids.append(m.grupo_curso.id)
+
+    # Horarios
+    horarios_map = {}
+    if grupo_ids:
+        bloques = BloqueHorario.objects.filter(
+            grupo_curso__id__in=grupo_ids
+        ).select_related('aula', 'grupo_curso')
+
+        for b in bloques:
+            gid = b.grupo_curso.id
+            horarios_map.setdefault(gid, []).append({
+                'dia': b.dia,
+                'horaInicio': b.horaInicio.strftime("%H:%M"),
+                'horaFin': b.horaFin.strftime("%H:%M"),
+                'aula': getattr(b.aula, 'nombre', getattr(b.aula, 'id', '-'))
+            })
+
+    # Cargar NOTAS desde la tabla Matricula
+    notas_por_curso = {}
+    for m in matriculas_qs:
+        gid = m.grupo_curso.id
+        notas_por_curso[gid] = {
+            'EC1': m.EC1,
+            'EP1': m.EP1,
+            'EC2': m.EC2,
+            'EP2': m.EP2,
+            'EC3': m.EC3,
+            'EP3': m.EP3,
+        }
+
+    # Asistencias
+    asistencias_qs = RegistroAsistenciaDetalle.objects.filter(
+        estudiante=estudiante
+    ).select_related(
+        'registro_asistencia__grupo_curso__curso'
+    ).order_by('-registro_asistencia__fechaClase')[:30]
+
+    asistencias = []
+    total_presentes = 0
+    total_faltas = 0
+
+    for d in asistencias_qs:
+        fecha = d.registro_asistencia.fechaClase.strftime("%Y-%m-%d")
+        grupo = d.registro_asistencia.grupo_curso
+        curso_nombre = grupo.curso.nombre if grupo and grupo.curso else ''
+        estado = d.estado
+
+        if estado == 'PRESENTE':
+            total_presentes += 1
+        else:
+            total_faltas += 1
+
+        asistencias.append({
+            'fecha': fecha,
+            'grupo_id': grupo.id if grupo else '',
+            'curso_nombre': curso_nombre,
+            'estado': estado
+        })
+
+    resumen = {
+        'total_matriculas': matriculas_qs.count(),
+        'total_presentes': total_presentes,
+        'total_faltas': total_faltas
+    }
+
+    contexto = {
+        'perfil': perfil_obj,
+        'titulo': f'Perfil Estudiante - {perfil_estudiante.nombre}',
+        'perfil_estudiante': perfil_estudiante,
+        'estudiante': estudiante,
+        'matriculas': [{'grupo': m['grupo'], 'estado': m['estado']} for m in matriculas],
+        'horarios_by_group': {'mat_map': horarios_map},
+        'notas_por_curso': notas_por_curso,
+        'laboratorios': laboratorios,
+        'asistencias': asistencias,
+        'resumen': resumen,
+    }
+
+    return render(request, 'usuarios/secretaria/detalle_estudiante.html', contexto)
+
+def detalle_profesor(request):
+    perfil_obj, response = check_secretaria_auth(request)
+    if response:
+        return response
+
+    codigo = request.GET.get("codigo") or (
+        request.resolver_match.kwargs.get("codigo")
+        if request.resolver_match else None
+    )
+    if not codigo:
+        messages.error(request, "No se indicó Código del profesor.")
+        return redirect(reverse("usuarios:registro_profesores"))
+
+    # ================================
+    #   1. Obtener profesor
+    # ================================
+    perfil_prof = get_object_or_404(Perfil, pk=codigo)
+    profesor = get_object_or_404(Profesor, perfil=perfil_prof)
+
+    # ================================
+    #   2. Obtener sus grupos asignados
+    # ================================
+    grupos_qs = (
+        GrupoCurso.objects.filter(profesor=profesor)
+        .select_related("curso", "profesor__perfil")
+        .order_by("curso__nombre")
+    )
+
+    # Determinar qué grupos son teoría
+    grupos_teoria_ids = set(
+        GrupoTeoria.objects.filter(grupo_curso__in=grupos_qs)
+        .values_list("grupo_curso_id", flat=True)
+    )
+
+    # ================================
+    #   3. Horarios por cada grupo
+    # ================================
+    horarios_map = {}
+    if grupos_qs:
+        bloques = (
+            BloqueHorario.objects.filter(grupo_curso__in=grupos_qs)
+            .select_related("aula", "grupo_curso")
+        )
+        for b in bloques:
+            gid = b.grupo_curso.id
+            horarios_map.setdefault(gid, []).append({
+                "dia": b.dia,
+                "horaInicio": b.horaInicio.strftime("%H:%M"),
+                "horaFin": b.horaFin.strftime("%H:%M"),
+                "aula": getattr(b.aula, "nombre", getattr(b.aula, "id", "-")),
+            })
+
+    # ================================
+    #   4. Temas (solo para teoría)
+    # ================================
+    temas_map = {}
+    teoria_ids = list(grupos_teoria_ids)
+
+    if teoria_ids:
+        temas_qs = (
+            TemaCurso.objects.filter(grupo_teoria_id__in=teoria_ids)
+            .order_by("orden")
+        )
+        for t in temas_qs:
+            temas_map.setdefault(t.grupo_teoria_id, []).append({
+                "orden": t.orden,
+                "nombre": t.nombre,
+                "fecha": t.fecha.strftime("%Y-%m-%d") if t.fecha else "-",
+                "completado": t.completado,
+            })
+
+    # ================================
+    #   5. Reservas del profesor
+    # ================================
+    reservas_qs = (
+        Reserva.objects
+        .filter(profesor=profesor)
+        .select_related("aula")
+        .order_by("-fecha_reserva")
+    )
+
+    reservas = []
+
+    for r in reservas_qs:
+        reservas.append({
+            "fecha_reserva": r.fecha_reserva.strftime("%Y-%m-%d"),
+            "hora_inicio": r.hora_inicio.strftime("%H:%M"),
+            "hora_fin": r.hora_fin.strftime("%H:%M"),
+            "aula_id": r.aula.id,
+            "aula_tipo": r.aula.get_tipo_display(),
+        })
+
+    # ================================
+    #   6. Asistencias tomadas
+    # ================================
+    grupos_ids = GrupoCurso.objects.filter(profesor=profesor).values_list('id', flat=True)
+
+    asistencias_qs = RegistroAsistencia.objects.filter(
+        grupo_curso__id__in=grupos_ids
+    ).select_related('grupo_curso__curso').order_by('-fechaClase')[:30]
+
+    asistencias = [{
+        'fechaClase': r.fechaClase.strftime("%Y-%m-%d"),
+        'horaInicioVentana': r.horaInicioVentana.strftime("%H:%M"),
+        'grupo_curso': r.grupo_curso,
+        'ipProfesor': r.ipProfesor
+    } for r in asistencias_qs]
+
+    # ================================
+    #   7. Resumen
+    # ================================
+    resumen = {
+        "total_cursos": grupos_qs.count(),
+        "total_reservas": reservas_qs.count(),
+        "total_asistencias": asistencias_qs.count(),
+    }
+
+    # ================================
+    #   8. Contexto final
+    # ================================
+    contexto = {
+        "perfil": perfil_obj,
+        "profesor": profesor,
+        "grupos": grupos_qs,
+        "grupos_teoria_ids": grupos_teoria_ids,
+        "horarios": horarios_map,
+        "temas": temas_map,
+        "reservas": reservas,
+        "asistencias": asistencias,
+        "resumen": resumen,
+        "titulo": f"Perfil Profesor - {profesor.perfil.nombre}",
+    }
+
+    return render(request, "usuarios/secretaria/detalle_profesor.html", contexto)
 
 def registro_profesores(request):
-    perfil_obj, response = check_secretaria_auth(request)
-    if response: return response
-    
-    # Recupera todos los profesores (datos dinámicos)
-    profesores = Profesor.objects.select_related('perfil').all().order_by('perfil__nombre')
+    # ===========================
+    #   SUBIR CSV
+    # ===========================
+    if request.method == "POST" and "subir_csv" in request.POST:
+        try:
+            file = request.FILES.get("csv_profesores")
 
-    contexto = {
-        'perfil': perfil_obj, 
-        'titulo': 'Registro de Profesores',
-        'profesores': profesores
-    }
-    return render(request, 'usuarios/secretaria/registro_profesores.html', contexto)
+            if not file:
+                messages.error(request, "Debe seleccionar un archivo CSV.")
+                return redirect("usuarios:registro_profesores")
+
+            decoded = file.read().decode("utf-8")
+            reader = csv.reader(decoded.splitlines())
+
+            # Formato esperado:
+            # cui, nombre, email, password
+            for row in reader:
+                if len(row) < 4:
+                    continue
+
+                codigo = row[0].strip()
+                nombre = row[1].strip()
+                email = row[2].strip() or None
+                password = row[3].strip()
+
+                if not (codigo and nombre and password):
+                    continue
+
+                perfil, created = Perfil.objects.get_or_create(
+                    id=codigo,
+                    defaults={
+                        "nombre": nombre,
+                        "email": email,
+                        "password": password,
+                        "rol": "PROFESOR",
+                        "estadoCuenta": True
+                    }
+                )
+
+                if not created:
+                    perfil.nombre = nombre
+                    perfil.email = email
+                    perfil.password = password
+                    perfil.rol = "PROFESOR"
+                    perfil.estadoCuenta = True
+                    perfil.save()
+
+                Profesor.objects.get_or_create(perfil=perfil)
+
+            messages.success(request, "CSV procesado correctamente.")
+
+        except Exception as e:
+            messages.error(request, f"Error procesando CSV: {str(e)}")
+
+        return redirect("usuarios:registro_profesores")
+
+    # ===========================
+    #   CREAR PROFESOR MANUAL
+    # ===========================
+    if request.method == "POST" and "crear_profesor" in request.POST:
+
+        codigo = request.POST.get("cui")
+        nombre = request.POST.get("nombre")
+        email = request.POST.get("email")
+        password = request.POST.get("password")
+
+        if not (codigo and nombre and password):
+            messages.error(request, "Código, Nombre y Contraseña son obligatorios.")
+            return redirect("usuarios:registro_profesores")
+
+        perfil = Perfil.objects.create(
+            id=codigo,
+            nombre=nombre,
+            email=email or None,
+            password=password,
+            rol="PROFESOR",
+            estadoCuenta=True
+        )
+
+        Profesor.objects.create(perfil=perfil)
+
+        messages.success(request, "Profesor creado correctamente.")
+        return redirect("usuarios:registro_profesores")
+
+    # ===========================
+    #   EDITAR PROFESOR
+    # ===========================
+    if request.method == "POST" and "editar_profesor" in request.POST:
+
+        profesor_id = request.POST.get("profesor_id")
+        nombre = request.POST.get("nombre")
+        email = request.POST.get("email")
+        estado = request.POST.get("estadoCuenta")
+        asignar_grupo_id = request.POST.get("grupo_curso_id")
+
+        perfil = Perfil.objects.get(id=profesor_id)
+
+        perfil.nombre = nombre
+        perfil.email = email or None
+        perfil.estadoCuenta = (estado == "True")
+        perfil.save()
+
+        if asignar_grupo_id:
+            grupo = GrupoCurso.objects.get(id=asignar_grupo_id)
+            grupo.profesor = profesor_id
+            grupo.save()
+
+        messages.success(request, "Profesor actualizado correctamente.")
+        return redirect("usuarios:registro_profesores")
+
+    # ===========================
+    #   ELIMINAR PROFESOR
+    # ===========================
+    if request.method == "POST" and "eliminar_profesor" in request.POST:
+
+        profesor_id = request.POST.get("profesor_id")
+
+        try:
+            perfil = Perfil.objects.get(id=profesor_id)
+            perfil.delete()
+            messages.success(request, "La cuenta del profesor fue eliminada.")
+        except Perfil.DoesNotExist:
+            messages.error(request, "El profesor no existe.")
+
+        return redirect("usuarios:registro_profesores")
+
+    # ===========================
+    #   ACTIVAR / DESACTIVAR
+    # ===========================
+    if "toggle_estado" in request.POST:
+
+        perfil = Perfil.objects.get(id=request.POST["profesor_id"])
+        perfil.estadoCuenta = not perfil.estadoCuenta
+        perfil.save()
+        messages.success(request, "Estado actualizado.")
+        return redirect("usuarios:registro_profesores")
+
+    # ===========================
+    #   LISTAR PROFESORES
+    # ===========================
+    profesores = Profesor.objects.select_related("perfil").all().order_by("perfil__nombre")
+    grupos_disponibles = GrupoCurso.objects.filter(profesor__isnull=True).filter(Q(grupoteoria__isnull=False) | Q(grupolaboratorio__isnull=False)).select_related("curso").order_by("curso__nombre", "grupo")
+
+    return render(request, "usuarios/secretaria/registro_profesores.html", {
+        "profesores": profesores,   
+        "grupos_disponibles_profesor": grupos_disponibles,
+    })
+
+# ----------------------------------------------------------------------
+# 4. VISTAS DEL ADMINISTRADOR
+# ----------------------------------------------------------------------
+
+def check_administrador_auth(request):
+    """Función de ayuda para verificar la sesión y el rol de Admin."""
+    if not request.session.get('is_authenticated') or request.session.get('usuario_rol') != 'ADMIN':
+        messages.warning(request, "Acceso denegado o rol incorrecto.")
+        return None, redirect('usuarios:selector_rol')
+    
+    usuario_id = request.session['usuario_id']
+    try:
+        admin_obj = Administrador.objects.select_related('perfil').get(perfil_id=usuario_id)
+        return admin_obj, None
+    except Administrador.DoesNotExist:
+        messages.error(request, "Error: Datos de secretaria no encontrados.")
+        return None, redirect('usuarios:logout')

@@ -8,13 +8,23 @@
     <div class="col-md-6">
         <label for="grupo_select" class="form-label fw-bold">Seleccionar Grupo:</label>
         <select class="form-select" id="grupo_select">
-            <option value="">-- Elija un Grupo --</option>
+            <option value="" data-silabo-subido="true">-- Elija un Grupo --</option>
             {% for grupo in grupos_asignados %}
-                <option value="{{ grupo.id }}" {% if grupo_seleccionado and grupo_seleccionado.id == grupo.id %}selected{% endif %}>
+                <!-- AÑADIDO: data-silabo-subido basado en si el sílabo está disponible -->
+                <option value="{{ grupo.id }}" 
+                        data-silabo-subido="{{ grupo.silabo_subido|lower }}" 
+                        {% if grupo_seleccionado and grupo_seleccionado.id == grupo.id %}selected{% endif %}>
                     {{ grupo.curso.id }} - {{ grupo.curso.nombre }} ({{ grupo.grupo }}) — ({{ grupo.tipo }})
+                    {% if grupo.tiene_clase_hoy %}
+                        🔔 ¡HOY!
+                    {% endif %}
                 </option>
             {% endfor %}
         </select>
+        <!-- AÑADIDO: Mensaje de advertencia de sílabo -->
+        <div id="silabo-warning" class="alert alert-warning p-2 small mt-2" style="display:none;">
+            🚨 <b>Advertencia:</b> El sílabo de este curso debe ser subido para registrar o ver la asistencia.
+        </div>
     </div>
 
     <div class="col-md-3">
@@ -24,37 +34,24 @@
     </div>
 
     <div class="col-md-3 d-flex align-items-end gap-2">
-        <button id="btn_ver" class="btn btn-primary w-100">Ver Detalle</button>
+        <!-- El botón ahora tiene un ID para deshabilitar y texto dinámico -->
+        <button id="btn_ver" class="btn btn-primary w-100" disabled>Ver Detalle</button>
     </div>
 </div>
 
-<!-- Área para mensajes de error de selección (mejor que alert()) -->
+{% if grupos_con_clase_hoy_ids %}
+<div class="small mb-3">
+    <span class="badge bg-info text-dark">🔔 ¡HOY!</span> Indica que este grupo tiene bloques de horario asignados para la fecha seleccionada/actual.
+</div>
+{% endif %}
+
+<!-- Área para mensajes de error de selección -->
 <div id="error-message" class="alert alert-danger p-2 small mt-2" style="display:none;"></div>
 
-<script>
-document.getElementById('btn_ver').addEventListener('click', function() {
-    const g = document.getElementById('grupo_select').value;
-    const f = document.getElementById('fecha_select').value;
-    const errorBox = document.getElementById('error-message');
-    errorBox.style.display = 'none'; // Ocultar mensaje anterior
-
-    if (!g) {
-        errorBox.textContent = 'Seleccione un grupo para continuar.';
-        errorBox.style.display = 'block';
-        return;
-    }
-    
-    // Si la fecha está vacía, la omitimos en la URL y el backend usará la fecha actual por defecto.
-    if (!f) {
-        window.location.href = '{% url "usuarios:registro_asistencia" %}?grupo=' + g;
-    } else {
-        window.location.href = '{% url "usuarios:registro_asistencia" %}?grupo=' + g + '&fecha=' + f;
-    }
-});
-</script>
+<!-- Contenedor principal para Historial/Detalle. Se mostrará/ocultará basado en el sílabo. -->
+<div id="content-container" style="display: {% if grupo_seleccionado and grupo_seleccionado.silabo_subido %}block{% else %}none{% endif %};">
 
 <!-- Historial compacto y export -->
-
 <div class="card shadow-sm mb-3">
     <div class="card-body d-flex justify-content-between align-items-center">
         <div>
@@ -179,7 +176,6 @@ document.getElementById('btn_ver').addEventListener('click', function() {
             {% endif %}
         </form>
 
-        {% if editable %}
         <script>
         // Asegura que solo se seleccione una opción por estudiante
         document.querySelectorAll('.chk_asistencia').forEach(function(chk) {
@@ -199,7 +195,6 @@ document.getElementById('btn_ver').addEventListener('click', function() {
             });
         });
         </script>
-        {% endif %}
     {% else %}
         <div class="alert alert-warning">No hay estudiantes matriculados para este grupo.</div>
     {% endif %}
@@ -212,10 +207,93 @@ document.getElementById('btn_ver').addEventListener('click', function() {
 <div class="alert alert-info">
 Seleccione una fecha (arriba) para ver el detalle de asistencia de esa sesión, o use las etiquetas del historial.
 </div>
-{% else %}
+
+{% endif %}
+
+{% if not grupo_seleccionado %}
 <div class="alert alert-secondary mt-3">
 Seleccione un grupo para ver su historial y opciones de exportación.
 </div>
 {% endif %}
 
+</div> <!-- Fin de #content-container -->
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const grupoSelect = document.getElementById('grupo_select');
+    const btnVer = document.getElementById('btn_ver');
+    const silaboWarning = document.getElementById('silabo-warning');
+    const errorMessage = document.getElementById('error-message');
+    const contentContainer = document.getElementById('content-container');
+
+    // Función principal de validación y actualización de la UI
+    function updateUI() {
+        // Obtener la opción seleccionada (manejando el caso de la opción vacía)
+        const selectedOption = grupoSelect.options[grupoSelect.selectedIndex];
+        // Verificar si el grupo seleccionado (o la opción 'Elija un Grupo') tiene el sílabo subido
+        const silaboSubido = selectedOption.getAttribute('data-silabo-subido') === 'true';
+        const grupoId = grupoSelect.value;
+        
+        // 1. Manejar el estado del botón "Ver Detalle"
+        if (!grupoId) {
+            btnVer.disabled = true;
+        } else {
+            // Si hay un grupo seleccionado, el botón se habilita SÓLO si el sílabo está subido
+            btnVer.disabled = !silaboSubido;
+        }
+
+        // 2. Mostrar/Ocultar el mensaje de advertencia del sílabo
+        if (grupoId && !silaboSubido) {
+            silaboWarning.style.display = 'block';
+        } else {
+            silaboWarning.style.display = 'none';
+        }
+
+        // 3. Ocultar el contenedor de contenido (Historial/Detalle) si el sílabo no está subido
+        // Si no hay grupo seleccionado, Django lo oculta por defecto (el contenedor no existe si no hay grupo_seleccionado)
+        if (grupoId && !silaboSubido) {
+             contentContainer.style.display = 'none';
+        } else if (grupoId && silaboSubido) {
+            // Si el grupo está seleccionado y el sílabo está OK, y estamos en una página que ya muestra
+            // el detalle (es decir, el backend ya lo renderizó), nos aseguramos de que esté visible.
+            // Si el backend no renderizó el detalle, el JS no debe interferir con el display:none
+            // que se puso en el bloque inicial.
+            if (contentContainer) {
+                contentContainer.style.display = 'block';
+            }
+        }
+        
+    }
+    
+    // Inicializar la UI al cargar la página (para el caso de que haya un grupo seleccionado por URL)
+    updateUI();
+
+    // Listener para cuando el grupo cambia
+    grupoSelect.addEventListener('change', updateUI);
+
+
+    // Listener para el botón "Ver Detalle" (se mantiene la lógica de URL)
+    btnVer.addEventListener('click', function() {
+        const g = grupoSelect.value;
+        const f = document.getElementById('fecha_select').value;
+        
+        errorMessage.style.display = 'none'; // Ocultar mensaje anterior
+        
+        // Si el botón está deshabilitado, el click no debería ocurrir, pero por seguridad...
+        if (btnVer.disabled) {
+            errorMessage.textContent = 'Seleccione un grupo con sílabo subido para continuar.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+
+        // Si la fecha está vacía, la omitimos en la URL y el backend usará la fecha actual por defecto.
+        if (!f) {
+            window.location.href = '{% url "usuarios:registro_asistencia" %}?grupo=' + g;
+        } else {
+            window.location.href = '{% url "usuarios:registro_asistencia" %}?grupo=' + g + '&fecha=' + f;
+        }
+    });
+});
+</script>
 {% endblock content %}

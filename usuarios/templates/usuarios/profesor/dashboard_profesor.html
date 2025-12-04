@@ -1,88 +1,104 @@
 {% extends "usuarios/profesor/base_profesor.html" %}
 
 {% block content %}
-  <h4 class="mb-4">Panel Docente | Bienvenido(a), Dr(a). {{ perfil.nombre }}</h4>
-  
-  <div class="row mb-5">
+    <!-- Encabezado con el nombre del profesor -->
+    <h4 class="mb-4">Panel Docente | Bienvenido(a), Dr(a). {{ perfil.nombre }}</h4>
     
-    <div class="col-md-4">
-        <div class="card text-white mb-3" style="background-color: #00A3A3 !important;">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="card-title">Cursos Asignados</h5>
-                    <p class="card-text fs-2">3</p> 
-                </div>
-                <i class="bi bi-book fs-1"></i>
-            </div>
-            <div class="card-footer" style="background-color: #007979 !important;">
-                <a href="{% url 'usuarios:mis_cursos_profesor' %}" class="text-white small">Ver detalle</a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="card text-white bg-danger mb-3">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="card-title">Asistencia</h5>
-                    <p class="card-text fs-2">30/10</p> 
-                </div>
-                <i class="bi bi-calendar-check fs-1"></i>
-            </div>
-            <div class="card-footer">
-                <a href="{% url 'usuarios:registro_asistencia' %}" class="text-white small">Registrar ahora</a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4">
-        <div class="card text-white bg-info mb-3">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="card-title">Aulas Reservadas</h5>
-                    <p class="card-text fs-2">1</p>
-                </div>
-                <i class="bi bi-clock-history fs-1"></i>
-            </div>
-            <div class="card-footer">
-                <a href="{% url 'usuarios:reservar_aula' %}" class="text-white small">Reservar/Ver detalle</a>
-            </div>
-        </div>
-    </div>
-  </div>
-
-  <div class="row">
-    
-    <div class="col-md-6 mb-4">
-      <div class="card border-primary" style="border-color: #00A3A3 !important;">
-        <div class="card-header text-white" style="background-color: #00A3A3 !important;">
-          <i class="bi bi-person-lines-fill me-2"></i> Información General del Docente
-        </div>
-        <div class="card-body">
-          <ul class="list-unstyled">
-            <li><strong>Código Docente:</strong> {{ perfil.id }}</li>
-            <li><strong>Email:</strong> {{ perfil.email }}</li>
-            <li><strong>Rol:</strong> {{ perfil.rol }}</li>
-            <li>
-                <strong>Tipo de Docencia:</strong> 
-                {% if profesor.es_teoria and profesor.es_lab %}Teoría y Laboratorio
-                {% elif profesor.es_teoria %}Solo Teoría
-                {% elif profesor.es_lab %}Solo Laboratorio
-                {% else %}No definido
-                {% endif %}
-            </li>
-            <li><strong>Estado de Cuenta:</strong> {% if perfil.estadoCuenta %}<span class="badge bg-success">Activo</span>{% else %}<span class="badge bg-danger">Inactivo</span>{% endif %}</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    
-    <div class="col-md-6 mb-4">
-        <h5>Notificaciones</h5>
+    <div class="row mb-5">
         
-        <div class="alert alert-warning">
-            <i class="bi bi-bell-fill me-2"></i> Recordatorio: La <b>Subida de Notas</> para INF301 vence en 3 días.
+        <!-- Tarjeta 1: Cursos Asignados (stats.cursos_asignados_count) -->
+        <div class="col-md-4">
+            <div class="card text-white mb-3 shadow-lg" style="background-color: #00A3A3 !important;">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Cursos Asignados</h5>
+                        <!-- Uso de la variable dinámica -->
+                        <p class="card-text fs-2">{{ stats.cursos_asignados_count }}</p> 
+                    </div>
+                    <i class="bi bi-book fs-1"></i>
+                </div>
+                <div class="card-footer" style="background-color: #007979 !important;">
+                    <a href="{% url 'usuarios:mis_cursos_profesor' %}" class="text-white small">Ver detalle</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tarjeta 2: Asistencia (stats.asistencia_resumen_hoy) -->
+        <div class="col-md-4">
+            <div class="card text-white bg-danger mb-3 shadow-lg">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Asistencia Hoy</h5>
+                        <!-- Uso de la variable dinámica (Formato X/Y) -->
+                        <p class="card-text fs-2">{{ stats.asistencia_resumen_hoy }}</p> 
+                    </div>
+                    <i class="bi bi-calendar-check fs-1"></i>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'usuarios:registro_asistencia' %}" class="text-white small">Registrar ahora</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tarjeta 3: Aulas Reservadas (stats.reservas_activas_semana) -->
+        <div class="col-md-4">
+            <div class="card text-white bg-info mb-3 shadow-lg">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title">Reservas de la Semana</h5>
+                        <!-- Uso de la variable dinámica -->
+                        <p class="card-text fs-2">{{ stats.reservas_activas_semana }}</p>
+                    </div>
+                    <i class="bi bi-clock-history fs-1"></i>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'usuarios:reservar_aula' %}" class="text-white small">Reservar/Ver detalle</a>
+                </div>
+            </div>
         </div>
     </div>
-  </div>
+
+    <div class="row">
+        
+        <!-- Panel de Información General del Docente (Ya estaba correcto) -->
+        <div class="col-md-6 mb-4">
+            <div class="card border-primary shadow-sm" style="border-color: #00A3A3 !important;">
+                <div class="card-header text-white" style="background-color: #00A3A3 !important;">
+                    <i class="bi bi-person-lines-fill me-2"></i> Información General del Docente
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li><strong>Código Docente:</strong> {{ perfil.id }}</li>
+                        <li><strong>Email:</strong> {{ perfil.email }}</li>
+                        <!-- Aquí se usa el rol pero se muestra el código. Podrías querer mostrar la descripción.
+                             Si quisieras la descripción, deberías usar un método en el modelo Perfil, pero por ahora se mantiene el código.
+                        -->
+                        <li><strong>Rol:</strong> {{ perfil.rol }}</li> 
+                        <li>
+                            <strong>Tipo de Docencia:</strong> 
+                            {% if profesor.es_teoria and profesor.es_lab %}Teoría y Laboratorio
+                            {% elif profesor.es_teoria %}Solo Teoría
+                            {% elif profesor.es_lab %}Solo Laboratorio
+                            {% else %}No definido
+                            {% endif %}
+                        </li>
+                        <li><strong>Estado de Cuenta:</strong> {% if perfil.estadoCuenta %}<span class="badge bg-success">Activo</span>{% else %}<span class="badge bg-danger">Inactivo</span>{% endif %}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Panel de Notificaciones (Se mantiene como ejemplo) -->
+        <div class="col-md-6 mb-4">
+            <h5 class="mb-3">Notificaciones (Ejemplo)</h5>
+            
+            <div class="alert alert-warning border-start border-2 border-warning shadow-sm">
+                <i class="bi bi-bell-fill me-2"></i> Recordatorio: La <b>Subida de Notas</b> para BASE DE DATOS I vence en 3 días.
+            </div>
+            
+            <div class="alert alert-primary border-start border-2 border-primary shadow-sm">
+                <i class="bi bi-info-circle-fill me-2"></i> Nuevo: Se ha publicado el <b>Silabo Oficial</b> de BASE DE DATOS I - Grupo A.
+            </div>
+        </div>
+    </div>
 {% endblock content %}

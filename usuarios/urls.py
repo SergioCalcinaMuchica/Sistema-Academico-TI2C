@@ -34,5 +34,7 @@ urlpatterns = [
     path('dashboard/secretaria/ver-horarios/', views.ver_horarios_clases, name='ver_horarios_clases'),
     path('dashboard/secretaria/gestion-laboratorios/', views.gestion_laboratorios, name='gestion_laboratorios'),
     path('dashboard/secretaria/registro-estudiantes/', views.registro_estudiantes, name='registro_estudiantes'),
+    path('dashboard/secretaria/detalle-estudiante/', views.detalle_estudiante, name='detalle_estudiante'),
     path('dashboard/secretaria/registro-profesores/', views.registro_profesores, name='registro_profesores'),
+    path('dashboard/secretaria/detalle-profesor/', views.detalle_profesor, name='detalle_profesor'),
 ]

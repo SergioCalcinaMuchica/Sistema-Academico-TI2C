@@ -1,138 +1,297 @@
 {% extends "usuarios/secretaria/base_secretaria.html" %}
 
 {% block content %}
-    <h4 class="mb-4">Gestión y Registro de Profesores</h4>
-    
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <form action="#" method="POST" enctype="multipart/form-data" class="d-flex align-items-center">
-                {% csrf_token %}
-                <input type="file" class="form-control w-auto me-2" name="csv_profesores" accept=".csv" required>
-                <button type="submit" class="btn btn-success"><i class="bi bi-cloud-upload"></i> Subir CSV</button>
-            </form>
-        </div>
-        <div class="col-md-6 text-end">
-            <button class="btn btn-primary"><i class="bi bi-person-plus"></i> Añadir Profesor</button>
-        </div>
-    </div>
-    
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <input type="text" class="form-control" id="search_profesor" onkeyup="filterTable('profesores-table')" placeholder="Buscar por Nombre o Código...">
-        </div>
-        <div class="col-md-4">
-             <select class="form-select">
-                <option selected>Filtrar por Tipo</option>
-                <option>Teoría y Laboratorio</option>
-                <option>Solo Teoría</option>
-                <option>Solo Laboratorio</option>
-            </select>
-        </div>
+
+<h4 class="mb-4">Gestión y Registro de Profesores</h4>
+
+<style>
+    .col-acciones {
+        width: 270px !important;
+    }
+</style>
+
+<!-- SUBIR CSV -->
+<div class="row mb-3">
+    <div class="col-md-8">
+        <form method="POST" enctype="multipart/form-data" class="d-flex align-items-center">
+            {% csrf_token %}
+            <input type="file" class="form-control w-auto me-2" name="csv_profesores" accept=".csv" required>
+            <button type="submit" name="subir_csv" class="btn btn-success">
+                <i class="bi bi-cloud-upload"></i> Subir CSV
+            </button>
+        </form>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-bordered table-striped table-hover" id="profesores-table">
-            <thead class="table-dark">
-                <tr>
-                    <th onclick="sortTable(0, 'profesores-table')">Código <i class="bi bi-sort-alpha-down"></i></th>
-                    <th onclick="sortTable(1, 'profesores-table')">Nombre Completo <i class="bi bi-sort-alpha-down"></i></th>
-                    <th scope="col">Tipo Docencia</th>
-                    <th scope="col">Estado</th>
-                    <th scope="col" class="text-center">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for profesor in profesores %}
-                <tr>
-                    <td>{{ profesor.perfil.id }}</td>
-                    <td>{{ profesor.perfil.nombre }}</td>
-                    <td>
-                        {% if profesor.es_teoria and profesor.es_lab %}T/L
-                        {% elif profesor.es_teoria %}Teoría
-                        {% elif profesor.es_lab %}Laboratorio
-                        {% endif %}
-                    </td>
-                    <td><span class="badge bg-{% if profesor.perfil.estadoCuenta %}success{% else %}danger{% endif %}">
+    <div class="col-md-4 text-end">
+        <button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#formCrearProfesor">
+            <i class="bi bi-person-plus"></i> Añadir Profesor
+        </button>
+    </div>
+</div>
+
+<!-- FORMULARIO CREAR PROFESOR -->
+<div class="collapse mb-4" id="formCrearProfesor">
+    <div class="card card-body shadow-sm">
+        <form method="POST">
+            {% csrf_token %}
+
+            <input type="hidden" name="crear_profesor" value="1">
+
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Código</label>
+                    <input type="text" name="codigo" class="form-control" required>
+                </div>
+
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Nombre Completo</label>
+                    <input type="text" name="nombre" class="form-control" required>
+                </div>
+
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control">
+                </div>
+            </div>
+
+            <div class="row mt-2">
+                <div class="col-md-4 mb-2">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" name="password" class="form-control" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-2">Guardar Profesor</button>
+        </form>
+    </div>
+</div>
+
+<!-- BUSCADOR -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <input type="text" class="form-control" id="search_profesor"
+               onkeyup="filterTable('profesores-table')"
+               placeholder="Buscar por Nombre o Código...">
+    </div>
+</div>
+
+<!-- TABLA -->
+<div class="table-responsive card shadow-sm">
+    <table class="table table-bordered table-striped table-hover mb-0" id="profesores-table">
+        <thead class="table-dark">
+            <tr>
+                <th onclick="sortTable(0, 'profesores-table')">Código</th>
+                <th onclick="sortTable(1, 'profesores-table')">Nombre Completo</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th class="text-center col-acciones">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for profesor in profesores %}
+            <tr>
+                <td>{{ profesor.perfil.id }}</td>
+                <td>{{ profesor.perfil.nombre }}</td>
+                <td>{{ profesor.perfil.email|default:"-" }}</td>
+
+                <td>
+                    <span class="badge bg-{% if profesor.perfil.estadoCuenta %}success{% else %}danger{% endif %}">
                         {% if profesor.perfil.estadoCuenta %}Activo{% else %}Inactivo{% endif %}
-                    </span></td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-info text-white me-2" title="Editar"><i class="bi bi-pencil"></i></button>
-                        <button class="btn btn-sm btn-danger" title="Inactivar"><i class="bi bi-lock"></i></button>
-                        <button class="btn btn-sm btn-warning" title="Ver Cursos"><i class="bi bi-book"></i></button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center">No hay profesores registrados en la base de datos.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </span>
+                </td>
+
+                <td class="text-center">
+
+                    <button class="btn btn-sm btn-info text-white me-1"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalEditarProfesor"
+                            data-id="{{ profesor.perfil.id }}"
+                            data-nombre="{{ profesor.perfil.nombre }}"
+                            data-email="{{ profesor.perfil.email }}"
+                            data-estado="{{ profesor.perfil.estadoCuenta }}">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+
+                    <form method="POST" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="toggle_estado" value="1">
+                        <input type="hidden" name="profesor_id" value="{{ profesor.perfil.id }}">
+                        <button class="btn btn-sm btn-danger" title="Inactivar / Activar">
+                            <i class="bi bi-lock"></i>
+                        </button>
+                    </form>
+
+                    <a href="{% url 'usuarios:detalle_profesor' %}?codigo={{ profesor.perfil.id }}"
+                       class="btn btn-sm btn-secondary ms-1">
+                        <i class="bi bi-card-list"></i> Ver información
+                    </a>
+
+                    <form method="POST" class="d-inline ms-1"
+                        onsubmit="return confirm('¿Seguro que deseas eliminar esta cuenta?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="eliminar_profesor" value="1">
+                        <input type="hidden" name="profesor_id" value="{{ profesor.perfil.id }}">
+                        <button class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">No hay profesores registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+<!-- MODAL EDITAR -->
+<div class="modal fade" id="modalEditarProfesor" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <form method="POST">
+                {% csrf_token %}
+
+                <input type="hidden" name="editar_profesor" value="1">
+                <input type="hidden" name="profesor_id" id="edit-id">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Profesor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label">Código</label>
+                        <input type="text" id="edit-codigo" class="form-control" readonly>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Nombre Completo</label>
+                        <input type="text" name="nombre" id="edit-nombre" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" id="edit-email" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Estado de Cuenta</label>
+                        <select name="estadoCuenta" id="edit-estado" class="form-select">
+                            <option value="True">Activo</option>
+                            <option value="False">Inactivo</option>
+                        </select>
+                    </div>
+
+                    <h5 class="mt-3">Asignar Curso (GrupoCurso)</h5>
+
+                    <div class="mb-3">
+                        <label class="form-label">Seleccione un GrupoCurso</label>
+                        <select name="grupo_curso_id" class="form-select">
+                            <option value="">— No asignar —</option>
+                            {% for gc in grupos_disponibles_profesor %}
+                                <option value="{{ gc.id }}">
+                                    {{ gc.curso.nombre }} - Grupo {{ gc.grupo }}
+                                    {% if gc.grupoteoria %}
+                                        (Teoría)
+                                    {% elif gc.grupolaboratorio %}
+                                        (Laboratorio)
+                                    {% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-primary">Guardar Cambios</button>
+                </div>
+
+            </form>
+
+        </div>
     </div>
+</div>
 
-    <script>
-        // La función filterTable y sortTable ya están definidas en registro_estudiantes.html 
-        // Si usas herencia o solo un script global, asegúrate de que esté cargado.
-        // Aquí se incluye nuevamente para que el HTML sea autocontenido.
-        function filterTable(tableId) {
-            var input, filter, table, tr, td, i, txtValue;
-            input = document.getElementById("search_profesor");
-            filter = input.value.toUpperCase();
-            table = document.getElementById(tableId);
-            tr = table.getElementsByTagName("tr");
+<!-- SCRIPTS -->
+<script>
+function filterTable(tableId) {
+    var input = document.getElementById("search_profesor");
+    var filter = input.value.toUpperCase();
+    var table = document.getElementById(tableId);
+    var tr = table.getElementsByTagName("tr");
 
-            for (i = 1; i < tr.length; i++) { 
-                tr[i].style.display = "none"; 
-                td = tr[i].getElementsByTagName("td");
-                if (td.length > 0) { 
-                    if (td[0].textContent.toUpperCase().indexOf(filter) > -1 || td[1].textContent.toUpperCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    }
-                }       
+    for (var i = 1; i < tr.length; i++) {
+        tr[i].style.display = "none";
+        var td = tr[i].getElementsByTagName("td");
+
+        if (td.length > 0) {
+            var code = td[0].innerText.toUpperCase();
+            var name = td[1].innerText.toUpperCase();
+
+            if (code.includes(filter) || name.includes(filter)) {
+                tr[i].style.display = "";
             }
         }
-        
-        function sortTable(n, tableId) {
-            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-            table = document.getElementById(tableId);
+    }
+}
+
+function sortTable(n, tableId) {
+    var table = document.getElementById(tableId);
+    var switching = true;
+    var dir = "asc";
+
+    while (switching) {
+        switching = false;
+        var rows = table.rows;
+
+        for (var i = 1; i < rows.length - 1; i++) {
+            var x = rows[i].getElementsByTagName("TD")[n];
+            var y = rows[i + 1].getElementsByTagName("TD")[n];
+            if (!x || !y) continue;
+
+            var xc = isNaN(x.innerText) ? x.innerText.toLowerCase() : parseFloat(x.innerText);
+            var yc = isNaN(y.innerText) ? y.innerText.toLowerCase() : parseFloat(y.innerText);
+
+            if ((dir === "asc" && xc > yc) || (dir === "desc" && xc < yc)) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                break;
+            }
+        }
+
+        if (!switching && dir === "asc") {
+            dir = "desc";
             switching = true;
-            dir = "asc"; 
-
-            while (switching) {
-                switching = false;
-                rows = table.rows;
-                
-                for (i = 1; i < (rows.length - 1); i++) {
-                    shouldSwitch = false;
-                    x = rows[i].getElementsByTagName("TD")[n];
-                    y = rows[i + 1].getElementsByTagName("TD")[n];
-
-                    var xContent = isNaN(x.innerHTML) ? x.innerHTML.toLowerCase() : parseFloat(x.innerHTML);
-                    var yContent = isNaN(y.innerHTML) ? y.innerHTML.toLowerCase() : parseFloat(y.innerHTML);
-                    
-                    if (dir == "asc") {
-                        if (xContent > yContent) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    } else if (dir == "desc") {
-                        if (xContent < yContent) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    }
-                }
-                if (shouldSwitch) {
-                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                    switching = true;
-                    switchcount++;
-                } else {
-                    if (switchcount == 0 && dir == "asc") {
-                        dir = "desc";
-                        switching = true;
-                    }
-                }
-            }
         }
-    </script>
-{% endblock content %}
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var modal = document.getElementById('modalEditarProfesor');
+
+    modal.addEventListener('show.bs.modal', function(event) {
+        var button = event.relatedTarget;
+
+        var id = button.getAttribute('data-id');
+        var nombre = button.getAttribute('data-nombre');
+        var email = button.getAttribute('data-email');
+        var estado = button.getAttribute('data-estado');
+
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-codigo').value = id;
+        document.getElementById('edit-nombre').value = nombre;
+        document.getElementById('edit-email').value = email ?? "";
+        document.getElementById('edit-estado').value = estado;
+    });
+});
+</script>
+
+{% endblock %}
