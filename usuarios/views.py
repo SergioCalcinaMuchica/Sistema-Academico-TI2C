@@ -617,6 +617,11 @@ def mis_horarios(request):
         
         dt_inicio_fila = hora_actual
         dt_fin_fila = dt_siguiente
+
+        duracion_minutos = (dt_fin_fila - dt_inicio_fila).total_seconds() / 60
+        if duracion_minutos < 11:
+            hora_actual = dt_siguiente
+            continue
         
         if dt_inicio_fila >= dt_fin_fila:
             hora_actual = dt_siguiente
@@ -1585,6 +1590,11 @@ def horarios_profesor(request):
         
         dt_inicio_fila = hora_actual
         dt_fin_fila = dt_siguiente
+
+        duracion_minutos = (dt_fin_fila - dt_inicio_fila).total_seconds() / 60
+        if duracion_minutos < 11:
+            hora_actual = dt_siguiente
+            continue
         
         # Saltamos si el intervalo es cero o negativo
         if dt_inicio_fila >= dt_fin_fila:
@@ -3417,6 +3427,11 @@ def ver_horarios_clases(request):
                     
                     dt_inicio_fila = hora_actual
                     dt_fin_fila = dt_siguiente
+
+                    duracion_minutos = (dt_fin_fila - dt_inicio_fila).total_seconds() / 60
+                    if duracion_minutos < 11:
+                        hora_actual = dt_siguiente
+                        continue
                     
                     if dt_inicio_fila >= dt_fin_fila:
                         hora_actual = dt_siguiente
@@ -3642,6 +3657,11 @@ def ver_horarios_clases(request):
                     
                     dt_inicio_fila = hora_actual
                     dt_fin_fila = dt_siguiente
+
+                    duracion_minutos = (dt_fin_fila - dt_inicio_fila).total_seconds() / 60
+                    if duracion_minutos < 11:
+                        hora_actual = dt_siguiente
+                        continue
                     
                     if dt_inicio_fila >= dt_fin_fila:
                         hora_actual = dt_siguiente
